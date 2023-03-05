@@ -5,7 +5,7 @@ edition = "2021"
 authors = ["paradust"]
 license = "MIT"
 readme = "README.md"
-repository = "https://github.com/paradust7/minetest-rs/minetest-protocol-derive"
+repository = "https://github.com/paradust7/minetest-rs"
 description = "Derive macros for minetest-protocol"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
