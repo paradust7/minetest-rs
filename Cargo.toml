@@ -1,0 +1,22 @@
+[workspace]
+
+members = [
+    "minetest-protocol",
+    "minetest-protocol-derive",
+    "minetest-shark",
+]
+
+[profile.dev]
+panic = "unwind"
+opt-level = 0
+debug = true
+strip = "none"
+
+[profile.test]
+panic = 'abort'
+
+[profile.bench]
+panic = 'abort'
+
+[profile.release]
+panic = 'abort'
