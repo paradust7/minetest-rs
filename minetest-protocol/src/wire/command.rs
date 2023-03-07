@@ -610,6 +610,13 @@ define_protocol!(41, 0x4f457403, ToServer, ToServerCommand => {
 
     SrpBytesM, 0x52, 1, true => SrpBytesMSpec {
         bytes_m: BinaryData16
+    },
+
+    UpdateClientInfo, 0x53, 1, true => UpdateClientInfoSpec {
+        render_target_size: v2u32,
+        real_gui_scaling: f32,
+        real_hud_scaling: f32,
+        max_fs_size: v2f
     }
 });
 

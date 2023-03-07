@@ -422,6 +422,13 @@ impl Div<f32> for v3f {
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, Clone, PartialEq, MinetestSerialize, MinetestDeserialize)]
+pub struct v2u32 {
+    pub x: u32,
+    pub y: u32,
+}
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, Clone, PartialEq, MinetestSerialize, MinetestDeserialize)]
 pub struct v2s16 {
     pub x: s16,
     pub y: s16,
@@ -1419,6 +1426,7 @@ pub struct SkyboxParams {
     pub textures: Option<Array16<String>>,
     // If skybox_type == "regular"
     pub sky_color: Option<SkyColor>,
+    pub body_orbit_tilt: Option<f32>,
 }
 
 impl Serialize for SkyboxParams {
@@ -1433,6 +1441,9 @@ impl Serialize for SkyboxParams {
             Serialize::serialize(&self.textures, ser)?;
         } else if self.typ == "regular" {
             Serialize::serialize(&self.sky_color, ser)?;
+        }
+        if let Some(body_orbit_tilt) = self.body_orbit_tilt {
+            Serialize::serialize(&body_orbit_tilt, ser)?;
         }
         Ok(())
     }
@@ -1459,6 +1470,7 @@ impl Deserialize for SkyboxParams {
             } else {
                 None
             },
+            body_orbit_tilt: Deserialize::deserialize(deser)?,
         })
     }
 }
@@ -3303,6 +3315,7 @@ pub struct HudFlags {
     pub minimap_visible: bool,
     pub minimap_radar_visible: bool,
     pub basic_debug: bool,
+    pub chat_visible: bool,
 }
 
 impl HudFlags {
@@ -3316,6 +3329,7 @@ impl HudFlags {
         flags |= (self.minimap_visible as u32) << 5;
         flags |= (self.minimap_radar_visible as u32) << 6;
         flags |= (self.basic_debug as u32) << 7;
+        flags |= (self.chat_visible as u32) << 8;
         flags
     }
 
@@ -3329,6 +3343,7 @@ impl HudFlags {
             minimap_visible: (flags & (1 << 5)) != 0,
             minimap_radar_visible: (flags & (1 << 6)) != 0,
             basic_debug: (flags & (1 << 7)) != 0,
+            chat_visible: (flags & (1 << 8)) != 0,
         }
     }
 }
@@ -3343,7 +3358,7 @@ impl Serialize for HudFlags {
 impl Deserialize for HudFlags {
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         let value = u32::deserialize(deser)?;
-        if (value & !0b11111111) != 0 {
+        if (value & !0b111111111) != 0 {
             bail!("Invalid HudFlags: {}", value);
         }
         Ok(HudFlags::from_u32(value))
