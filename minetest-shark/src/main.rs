@@ -42,6 +42,8 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn real_main() -> anyhow::Result<()> {
+    std::env::set_var("RUST_BACKTRACE", "1");
+
     let args = Args::parse();
 
     if args.audit {

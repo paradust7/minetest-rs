@@ -11,10 +11,6 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::peer::peer::PeerToSocket;
-use crate::wire::packet::Packet;
-use crate::wire::ser::Serialize;
-use crate::wire::ser::SliceSerializer;
-use crate::wire::types::CommandDirection;
 
 use crate::peer::peer::new_peer;
 use crate::peer::peer::Peer;
@@ -95,7 +91,7 @@ pub struct MinetestSocketRunner {
     peers: HashMap<SocketAddr, PeerIO>,
     peer_tx: UnboundedSender<PeerToSocket>,
     peer_rx: UnboundedReceiver<PeerToSocket>,
-    outgoing: VecDeque<(SocketAddr, Packet)>,
+    outgoing: VecDeque<(SocketAddr, Vec<u8>)>,
     accept_tx: UnboundedSender<Peer>,
     knock_rx: UnboundedReceiver<SocketAddr>,
     for_server: bool,
@@ -158,16 +154,13 @@ impl MinetestSocketRunner {
             };
         }
         if t.is_writable() && !self.outgoing.is_empty() {
-            let (addr, pkt) = self.outgoing.pop_back().unwrap();
-            let data = self.serialize_to(&pkt, buf);
-            if let Some(data) = data {
-                match self.socket.try_send_to(&data, addr) {
-                    Ok(_) => (),
-                    Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                        self.outgoing.push_back((addr, pkt));
-                    }
-                    Err(e) => panic!("Unexpected socket error: {:?}", e),
+            let (addr, data) = self.outgoing.pop_back().unwrap();
+            match self.socket.try_send_to(&data, addr) {
+                Ok(_) => (),
+                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    self.outgoing.push_back((addr, data));
                 }
+                Err(e) => panic!("Unexpected socket error: {:?}", e),
             }
         }
         Ok(())
@@ -201,19 +194,5 @@ impl MinetestSocketRunner {
 
     fn remove_peer(&mut self, remote_addr: SocketAddr) {
         self.peers.remove(&remote_addr);
-    }
-
-    // Send a packet to this peer
-    // This should only be used by the peer controller
-    pub fn serialize_to<'a>(&self, pkt: &Packet, buffer: &'a mut [u8]) -> Option<&'a [u8]> {
-        let dir = CommandDirection::for_send(!self.for_server);
-        let mut serializer = SliceSerializer::new(dir, buffer);
-        if let Some(_err) = Serialize::serialize(pkt, &mut serializer).err() {
-            panic!("Packet serialize error");
-        }
-        match serializer.finish() {
-            Some(count) => Some(&buffer[..count]),
-            None => None,
-        }
     }
 }

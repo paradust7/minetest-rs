@@ -4,8 +4,10 @@
 
 use std::str::FromStr;
 
-use anyhow::anyhow;
 use anyhow::bail;
+use anyhow::Result;
+use miniz_oxide::inflate::core::inflate_flags;
+use miniz_oxide::inflate::core::DecompressorOxide;
 use zstd_safe::InBuffer;
 use zstd_safe::OutBuffer;
 
@@ -76,7 +78,7 @@ where
                     write(&written)?;
                 }
             }
-            Err(e) => return Err(anyhow!("zstd_compress: {}", zstd_safe::get_error_name(e))),
+            Err(e) => bail!("zstd_compress: {}", zstd_safe::get_error_name(e)),
         }
     }
     loop {
@@ -91,12 +93,7 @@ where
                     break;
                 }
             }
-            Err(ec) => {
-                return Err(anyhow!(
-                    "zstd_compress end: {}",
-                    zstd_safe::get_error_name(ec)
-                ))
-            }
+            Err(ec) => bail!("zstd_compress end: {}", zstd_safe::get_error_name(ec)),
         }
     }
     Ok(())
@@ -131,7 +128,7 @@ where
                     break;
                 }
             }
-            Err(ec) => return Err(anyhow!("zstd_compress: {}", zstd_safe::get_error_name(ec))),
+            Err(ec) => bail!("zstd_compress: {}", zstd_safe::get_error_name(ec)),
         };
     }
     Ok(input_buffer.pos())
@@ -308,6 +305,58 @@ pub fn next_word(line: &[u8]) -> Option<(&[u8], &[u8])> {
             } else {
                 Some((line, &line[line.len()..]))
             }
+        }
+    }
+}
+
+pub fn compress_zlib(uncompressed: &[u8]) -> Vec<u8> {
+    miniz_oxide::deflate::compress_to_vec_zlib(uncompressed, 6)
+}
+
+/// This method must detect the end of the stream.
+/// 'uncompressed' may have more data past the end of the zlib stream
+/// Returns (bytes_consumed, uncompressed_data)
+pub fn decompress_zlib(input: &[u8]) -> Result<(usize, Vec<u8>)> {
+    let flags = inflate_flags::TINFL_FLAG_PARSE_ZLIB_HEADER
+        | inflate_flags::TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF;
+    let mut ret: Vec<u8> = vec![0; input.len().saturating_mul(2)];
+
+    let mut decomp = Box::<DecompressorOxide>::default();
+
+    let mut in_pos = 0;
+    let mut out_pos = 0;
+    loop {
+        // Wrap the whole output slice so we know we have enough of the
+        // decompressed data for matches.
+        let (status, in_consumed, out_consumed) = miniz_oxide::inflate::core::decompress(
+            &mut decomp,
+            &input[in_pos..],
+            &mut ret,
+            out_pos,
+            flags,
+        );
+        in_pos += in_consumed;
+        out_pos += out_consumed;
+
+        match status {
+            miniz_oxide::inflate::TINFLStatus::Done => {
+                ret.truncate(out_pos);
+                return Ok((in_pos, ret));
+            }
+
+            miniz_oxide::inflate::TINFLStatus::HasMoreOutput => {
+                // if the buffer has already reached the size limit, return an error
+                // calculate the new length, capped at `max_output_size`
+                let new_len = ret.len().saturating_mul(2);
+                ret.resize(new_len, 0);
+            }
+
+            err => bail!(
+                "zlib decompression error: in_pos={}, out_pos={}, {:?}",
+                in_pos,
+                out_pos,
+                err
+            ),
         }
     }
 }

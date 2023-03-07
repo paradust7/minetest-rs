@@ -28,7 +28,7 @@ impl MinetestClient {
 
     /// If this fails, the client has disconnected.
     pub async fn recv(&mut self) -> anyhow::Result<ToClientCommand> {
-        match self.remote_peer.recv().await.unwrap() {
+        match self.remote_peer.recv().await? {
             Command::ToClient(cmd) => Ok(cmd),
             Command::ToServer(_) => bail!("Invalid packet direction"),
         }

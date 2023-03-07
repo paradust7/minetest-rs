@@ -154,7 +154,7 @@ macro_rules! define_protocol {
                         $( (CommandDirection::$dir, $id) => $command_ty::$name(Box::new(Deserialize::deserialize(deser)?)) ),*,
                         _ => bail!(DeserializeError::BadPacketId(dir, command_id)),
                     };
-                    audit_command(orig_buffer, &result);
+                    audit_command(deser.context(), orig_buffer, &result);
                     Ok(result)
                 }
             }
@@ -197,7 +197,7 @@ define_protocol!(41, 0x4f457403, ToClient, ToClientCommand => {
 
     Blockdata, 0x20, 2, true => BlockdataSpec {
         pos: v3s16,
-        datastring: ZStdCompressed<MapBlock>,
+        block: MapBlock,
         network_specific_version: u8
     },
     Addnode, 0x21, 0, true => AddnodeSpec {
@@ -254,7 +254,7 @@ define_protocol!(41, 0x4f457403, ToClient, ToClientCommand => {
 
     Hp, 0x33, 0, true => HpSpec {
         hp: u16,
-        damage_effort: Option<bool>
+        damage_effect: Option<bool>
     },
 
     MovePlayer, 0x34, 0, true => MovePlayerSpec {
@@ -626,9 +626,7 @@ pub trait CommandProperties {
     fn command_name(&self) -> &'static str;
 }
 
-pub trait CommandRef:
-    CommandProperties + std::fmt::Debug + Serialize + Deserialize + PartialEq
-{
+pub trait CommandRef: CommandProperties + std::fmt::Debug + Serialize + Deserialize {
     fn toserver_ref(&self) -> Option<&ToServerCommand>;
     fn toclient_ref(&self) -> Option<&ToClientCommand>;
 }

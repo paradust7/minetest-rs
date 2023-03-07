@@ -21,6 +21,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::wire::command::Command;
 use crate::wire::command::CommandProperties;
+use crate::wire::command::ToClientCommand;
 use crate::wire::deser::Deserialize;
 use crate::wire::deser::Deserializer;
 use crate::wire::packet::AckBody;
@@ -31,8 +32,9 @@ use crate::wire::packet::PacketBody;
 use crate::wire::packet::PeerId;
 use crate::wire::packet::ReliableBody;
 use crate::wire::packet::SetPeerIdBody;
-use crate::wire::packet::LATEST_PROTOCOL_VERSION;
-use crate::wire::types::CommandDirection;
+use crate::wire::ser::Serialize;
+use crate::wire::ser::VecSerializer;
+use crate::wire::types::ProtocolContext;
 
 use super::reliable_receiver::ReliableReceiver;
 use super::reliable_sender::ReliableSender;
@@ -49,12 +51,14 @@ const INEXISTENT_PEER_ID_GRACE: Duration = Duration::from_secs(20);
 
 #[derive(thiserror::Error, Debug)]
 pub enum PeerError {
-    #[error("Peer Disconnected")]
-    PeerDisconnected,
+    #[error("Peer sent disconnect packet")]
+    PeerSentDisconnect,
     #[error("Socket Closed")]
     SocketClosed,
     #[error("Controller Closed")]
     ControllerClosed,
+    #[error("Internal Peer error")]
+    InternalPeerError,
 }
 
 pub type ChannelNum = u8;
@@ -66,7 +70,7 @@ pub struct Peer {
     remote_is_server: bool,
     /// TODO(paradust): Add backpressure
     send: UnboundedSender<Command>,
-    recv: UnboundedReceiver<Command>,
+    recv: UnboundedReceiver<Result<Command>>,
 }
 
 impl Peer {
@@ -88,10 +92,10 @@ impl Peer {
     /// Receive command from the peer
     /// Returns (channel, reliable flag, Command)
     /// If this fails, the peer is disconnected.
-    pub async fn recv(&mut self) -> Result<Command> {
+    pub async fn recv(&mut self) -> anyhow::Result<Command> {
         match self.recv.recv().await {
-            Some(cmd) => Ok(cmd),
-            None => bail!(PeerError::PeerDisconnected),
+            Some(result) => result,
+            None => bail!(PeerError::InternalPeerError),
         }
     }
 }
@@ -120,12 +124,14 @@ pub fn new_peer(
     let socket_peer_runner = PeerRunner {
         remote_addr,
         remote_is_server,
-        protocol_version: LATEST_PROTOCOL_VERSION,
+        recv_context: ProtocolContext::latest_for_receive(remote_is_server),
+        send_context: ProtocolContext::latest_for_send(remote_is_server),
         connect_time: Instant::now(),
         remote_peer_id: 0,
         local_peer_id: 0,
         from_socket: relay_rx,
         from_controller: peer_send_rx,
+        to_controller: peer_recv_tx.clone(),
         to_socket: peer_to_socket,
         channels: vec![
             Channel::new(remote_is_server, peer_recv_tx.clone()),
@@ -159,29 +165,38 @@ struct Channel {
     split_in: SplitReceiver,
     split_out: SplitSender,
 
-    to_controller: UnboundedSender<Command>,
+    to_controller: UnboundedSender<Result<Command>>,
     now: Instant,
-    protocol_version: u16,
-    remote_is_server: bool,
+    recv_context: ProtocolContext,
+    send_context: ProtocolContext,
 }
 
 impl Channel {
-    pub fn new(remote_is_server: bool, to_controller: UnboundedSender<Command>) -> Self {
+    pub fn new(remote_is_server: bool, to_controller: UnboundedSender<Result<Command>>) -> Self {
         Self {
             unreliable_out: VecDeque::new(),
             reliable_in: ReliableReceiver::new(),
             reliable_out: ReliableSender::new(),
             split_in: SplitReceiver::new(),
-            split_out: SplitSender::new(remote_is_server),
+            split_out: SplitSender::new(),
             to_controller,
             now: Instant::now(),
-            protocol_version: LATEST_PROTOCOL_VERSION,
-            remote_is_server,
+            recv_context: ProtocolContext::latest_for_receive(remote_is_server),
+            send_context: ProtocolContext::latest_for_send(remote_is_server),
         }
     }
 
     pub fn update_now(&mut self, now: &Instant) {
         self.now = *now;
+    }
+
+    pub fn update_context(
+        &mut self,
+        recv_context: &ProtocolContext,
+        send_context: &ProtocolContext,
+    ) {
+        self.recv_context = *recv_context;
+        self.send_context = *send_context;
     }
 
     /// Process a packet received from remote
@@ -208,11 +223,7 @@ impl Channel {
             InnerBody::Original(body) => self.process_command(body.command).await,
             InnerBody::Split(body) => {
                 if let Some(payload) = self.split_in.push(self.now, body)? {
-                    let mut buf = Deserializer::new(
-                        self.protocol_version,
-                        CommandDirection::for_receive(self.remote_is_server),
-                        &payload,
-                    );
+                    let mut buf = Deserializer::new(self.recv_context, &payload);
                     let command = Command::deserialize(&mut buf)?;
                     self.process_command(command).await;
                 }
@@ -232,7 +243,7 @@ impl Channel {
     }
 
     pub async fn process_command(&mut self, command: Command) {
-        match self.to_controller.send(command) {
+        match self.to_controller.send(Ok(command)) {
             Ok(_) => (),
             Err(e) => panic!("Unexpected command channel shutdown: {:?}", e),
         }
@@ -240,7 +251,7 @@ impl Channel {
 
     /// Send command to remote
     pub fn send(&mut self, reliable: bool, command: Command) -> anyhow::Result<()> {
-        let bodies = self.split_out.push(command)?;
+        let bodies = self.split_out.push(self.send_context, command)?;
         for body in bodies.into_iter() {
             self.send_inner(reliable, body);
         }
@@ -283,8 +294,8 @@ pub enum SocketToPeer {
 #[derive(Debug)]
 pub enum PeerToSocket {
     // Acks are sent with higher priority
-    SendImmediate(SocketAddr, Packet),
-    Send(SocketAddr, Packet),
+    SendImmediate(SocketAddr, Vec<u8>),
+    Send(SocketAddr, Vec<u8>),
     PeerIsDisconnected(SocketAddr),
 }
 
@@ -292,7 +303,8 @@ pub struct PeerRunner {
     remote_addr: SocketAddr,
     remote_is_server: bool,
     connect_time: Instant,
-    protocol_version: u16,
+    recv_context: ProtocolContext,
+    send_context: ProtocolContext,
 
     // TODO(paradust): These should have a limited size, and close connection on overflow.
     from_socket: UnboundedReceiver<SocketToPeer>,
@@ -300,6 +312,7 @@ pub struct PeerRunner {
 
     // TODO(paradust): These should have backpressure
     from_controller: UnboundedReceiver<Command>,
+    to_controller: UnboundedSender<Result<Command>>,
 
     // This is the peer id in the Minetest protocol
     // Minetest's server uses these to keep track of clients, but we use the remote_addr.
@@ -326,10 +339,24 @@ impl PeerRunner {
         }
     }
 
-    pub async fn send_raw(&mut self, channel: u8, body: PacketBody) -> Result<()> {
+    pub fn serialize_for_send(&mut self, channel: u8, body: PacketBody) -> Result<Vec<u8>> {
         let pkt = Packet::new(self.local_peer_id, channel, body);
+        let mut serializer = VecSerializer::new(self.send_context, 512);
+        Serialize::serialize(&pkt, &mut serializer)?;
+        Ok(serializer.take())
+    }
+
+    pub async fn send_raw(&mut self, channel: u8, body: PacketBody) -> Result<()> {
+        let raw = self.serialize_for_send(channel, body)?;
         self.to_socket
-            .send(PeerToSocket::Send(self.remote_addr, pkt))?;
+            .send(PeerToSocket::Send(self.remote_addr, raw))?;
+        Ok(())
+    }
+
+    pub async fn send_raw_priority(&mut self, channel: u8, body: PacketBody) -> Result<()> {
+        let raw = self.serialize_for_send(channel, body)?;
+        self.to_socket
+            .send(PeerToSocket::SendImmediate(self.remote_addr, raw))?;
         Ok(())
     }
 
@@ -340,7 +367,7 @@ impl PeerRunner {
             // Send a disconnect packet, and a remove peer request to the socket
             // These channels might already be dead, so ignore any errors.
             let disconnected_cleanly: bool = if let Some(e) = err.downcast_ref::<PeerError>() {
-                matches!(e, PeerError::PeerDisconnected)
+                matches!(e, PeerError::PeerSentDisconnect)
             } else {
                 false
             };
@@ -353,6 +380,9 @@ impl PeerRunner {
             let _ = self
                 .to_socket
                 .send(PeerToSocket::PeerIsDisconnected(self.remote_addr));
+
+            // Tell the controller why we died
+            let _ = self.to_controller.send(Err(err));
         }
     }
 
@@ -396,8 +426,7 @@ impl PeerRunner {
         };
         match msg {
             SocketToPeer::Received(buf) => {
-                let dir = CommandDirection::for_receive(self.remote_is_server);
-                let mut deser = Deserializer::new(self.protocol_version, dir, &buf);
+                let mut deser = Deserializer::new(self.recv_context, &buf);
                 let pkt = Packet::deserialize(&mut deser)?;
                 self.last_received = self.now;
                 self.process_packet(pkt).await?;
@@ -412,6 +441,8 @@ impl PeerRunner {
             Some(command) => command,
             None => bail!(PeerError::ControllerClosed),
         };
+        self.sniff_hello(&command);
+
         self.send_command(command).await?;
         Ok(())
     }
@@ -454,7 +485,9 @@ impl PeerRunner {
         }
 
         // Send ack right away
-        self.maybe_ack(&pkt);
+        if let Some(rb) = pkt.as_reliable() {
+            self.send_ack(pkt.channel, rb).await?;
+        }
 
         // Certain control packets need to be handled at the
         // top-level (here) instead of in a channel.
@@ -480,28 +513,42 @@ impl PeerRunner {
                 ControlBody::Ping => {
                     // no-op. Packet already updated timeout
                 }
-                ControlBody::Disconnect => return Err(PeerError::PeerDisconnected.into()),
+                ControlBody::Disconnect => bail!(PeerError::PeerSentDisconnect),
             }
         }
+        // If this is a HELLO packet, sniff it to set our protocol context.
+        if let Some(command) = pkt.body.command_ref() {
+            self.sniff_hello(command);
+        }
+
         self.channels[pkt.channel as usize].process(pkt.body).await
+    }
+
+    fn sniff_hello(&mut self, command: &Command) {
+        match command {
+            Command::ToClient(ToClientCommand::Hello(spec)) => {
+                self.update_context(spec.serialization_ver, spec.proto_ver);
+            }
+            _ => (),
+        }
+    }
+
+    fn update_context(&mut self, ser_fmt: u8, protocol_version: u16) {
+        self.recv_context.protocol_version = protocol_version;
+        self.recv_context.ser_fmt = ser_fmt;
+        self.send_context.protocol_version = protocol_version;
+        self.send_context.ser_fmt = ser_fmt;
+        for num in 0..=2 {
+            self.channels[num].update_context(&self.recv_context, &self.send_context);
+        }
     }
 
     /// If this is a reliable packet, send an ack right away
     /// using a higher-priority out-of-band channel.
-    fn maybe_ack(&mut self, pkt: &Packet) {
-        match &pkt.body {
-            PacketBody::Reliable(rb) => {
-                let ack = Packet::new(
-                    self.local_peer_id,
-                    pkt.channel,
-                    AckBody::new(rb.seqnum).into_inner().into_unreliable(),
-                );
-                self.to_socket
-                    .send(PeerToSocket::SendImmediate(self.remote_addr, ack))
-                    .unwrap();
-            }
-            _ => {}
-        }
+    async fn send_ack(&mut self, channel: u8, rb: &ReliableBody) -> anyhow::Result<()> {
+        let ack = AckBody::new(rb.seqnum).into_inner().into_unreliable();
+        self.send_raw_priority(channel, ack).await?;
+        Ok(())
     }
 
     /// Send command to remote

@@ -1,4 +1,5 @@
 use super::types::CommandDirection;
+use super::types::ProtocolContext;
 use anyhow::bail;
 use std::num::ParseIntError;
 use std::str::Utf8Error;
@@ -19,7 +20,7 @@ pub enum DeserializeError {
     DecompressionFailed(String),
     #[error("OtherError: {0}")]
     OtherError(String),
-    #[error("Eof")]
+    #[error("EOF during deserialization")]
     Eof, // Data ended prematurely
 }
 
@@ -44,32 +45,30 @@ impl From<anyhow::Error> for DeserializeError {
 pub type DeserializeResult<R> = anyhow::Result<R>;
 
 pub struct Deserializer<'a> {
-    pub protocol_version: u16,
-    pub dir: CommandDirection,
+    pub context: ProtocolContext,
     pub data: &'a [u8], // Remaining data
 }
 
 impl<'a> Deserializer<'a> {
-    pub fn new(protocol_version: u16, dir: CommandDirection, data: &'a [u8]) -> Self {
-        Self {
-            protocol_version,
-            dir,
-            data,
-        }
+    pub fn new(context: ProtocolContext, data: &'a [u8]) -> Self {
+        Self { context, data }
     }
 
     /// Take a number of bytes, and return a sub-Deserializer which
     /// only operates on those bytes
     pub fn slice(&mut self, count: usize) -> DeserializeResult<Self> {
         Ok(Self {
-            protocol_version: self.protocol_version,
-            dir: self.dir,
+            context: self.context,
             data: &self.take(count)?,
         })
     }
 
+    pub fn context(&self) -> ProtocolContext {
+        self.context
+    }
+
     pub fn direction(&self) -> CommandDirection {
-        self.dir
+        self.context.dir
     }
 
     pub fn remaining(&self) -> usize {

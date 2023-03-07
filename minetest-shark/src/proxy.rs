@@ -86,8 +86,8 @@ impl ProxyAdapterRunner {
     pub async fn run(mut self) {
         match self.run_inner().await {
             Ok(_) => (),
-            Err(_) => {
-                println!("[{}] Disconnected", self.id)
+            Err(err) => {
+                println!("[{}] Disconnected: {:?}", self.id, err)
             }
         }
     }

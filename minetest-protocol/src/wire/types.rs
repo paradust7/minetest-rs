@@ -20,11 +20,15 @@ use super::deser::Deserialize;
 use super::deser::DeserializeError;
 use super::deser::DeserializeResult;
 use super::deser::Deserializer;
+use super::packet::LATEST_PROTOCOL_VERSION;
+use super::packet::SER_FMT_HIGHEST_READ;
 use super::ser::Serialize;
 use super::ser::SerializeError;
 use super::ser::SerializeResult;
 use super::ser::Serializer;
 use super::ser::VecSerializer;
+use super::util::compress_zlib;
+use super::util::decompress_zlib;
 use super::util::deserialize_json_string_if_needed;
 use super::util::next_word;
 use super::util::serialize_json_string_if_needed;
@@ -73,6 +77,31 @@ impl CommandDirection {
         match self {
             ToClient => ToServer,
             ToServer => ToClient,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ProtocolContext {
+    pub dir: CommandDirection,
+    pub protocol_version: u16,
+    pub ser_fmt: u8,
+}
+
+impl ProtocolContext {
+    pub fn latest_for_receive(remote_is_server: bool) -> Self {
+        Self {
+            dir: CommandDirection::for_receive(remote_is_server),
+            protocol_version: LATEST_PROTOCOL_VERSION,
+            ser_fmt: SER_FMT_HIGHEST_READ,
+        }
+    }
+
+    pub fn latest_for_send(remote_is_server: bool) -> Self {
+        Self {
+            dir: CommandDirection::for_send(remote_is_server),
+            protocol_version: LATEST_PROTOCOL_VERSION,
+            ser_fmt: SER_FMT_HIGHEST_READ,
         }
     }
 }
@@ -641,7 +670,7 @@ impl<T: Serialize> Serialize for Option16<T> {
         match self {
             Option16::None => u16::serialize(&0u16, ser),
             Option16::Some(value) => {
-                let mut buf = VecSerializer::new(ser.direction(), 64);
+                let mut buf = VecSerializer::new(ser.context(), 64);
                 Serialize::serialize(value, &mut buf)?;
                 let buf = buf.take();
                 let num_bytes = u16::try_from(buf.len())?;
@@ -826,12 +855,11 @@ pub struct ObjectProperties {
     pub eye_height: f32,
     pub zoom_fov: f32,
     pub use_texture_alpha: bool,
-    //
-    pub damage_texture_modifier: String,
-    pub shaded: bool,
-    pub show_on_minimap: bool,
-    pub nametag_bgcolor: SColor,
-    pub rotate_selectionbox: bool,
+    pub damage_texture_modifier: Option<String>,
+    pub shaded: Option<bool>,
+    pub show_on_minimap: Option<bool>,
+    pub nametag_bgcolor: Option<SColor>,
+    pub rotate_selectionbox: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, MinetestSerialize, MinetestDeserialize)]
@@ -1082,7 +1110,7 @@ pub struct StarParams {
     pub count: u32,
     pub starcolor: SColor,
     pub scale: f32,
-    pub day_opacity: f32,
+    pub day_opacity: Option<f32>,
 }
 
 #[derive(Debug, Clone, PartialEq, MinetestSerialize, MinetestDeserialize)]
@@ -1513,7 +1541,7 @@ impl<T: Serialize> Serialize for ZLibCompressed<T> {
         // TODO(paradust): Performance nightmare.
 
         // Serialize 'value' to a temporary buffer, and then compress
-        let mut tmp = VecSerializer::new(ser.direction(), 1024);
+        let mut tmp = VecSerializer::new(ser.context(), 1024);
         Serialize::serialize(&self.value, &mut tmp)?;
         let tmp = tmp.take();
         let tmp = miniz_oxide::deflate::compress_to_vec_zlib(&tmp, 6);
@@ -1532,7 +1560,7 @@ impl<T: Deserialize> Deserialize for ZLibCompressed<T> {
         // TODO(paradust): DANGEROUS. There is no decompression size bound.
         match miniz_oxide::inflate::decompress_to_vec_zlib(&data) {
             Ok(decompressed) => {
-                let mut tmp = Deserializer::new(deser.protocol_version, deser.dir, &decompressed);
+                let mut tmp = Deserializer::new(deser.context(), &decompressed);
                 Ok(Self {
                     value: Deserialize::deserialize(&mut tmp)?,
                 })
@@ -1551,7 +1579,7 @@ impl<T: Serialize> Serialize for ZStdCompressed<T> {
     fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
         // Serialize 'value' into a temporary buffer
         // TODO(paradust): Performance concern, could stream instead
-        let mut tmp = VecSerializer::new(ser.direction(), 65536);
+        let mut tmp = VecSerializer::new(ser.context(), 65536);
         Serialize::serialize(&self.value, &mut tmp)?;
         let tmp = tmp.take();
         match zstd_compress(&tmp, |chunk| {
@@ -1574,8 +1602,7 @@ impl<T: Deserialize> Deserialize for ZStdCompressed<T> {
         }) {
             Ok(consumed) => {
                 deser.take(consumed)?;
-                let mut tmp_deser =
-                    Deserializer::new(deser.protocol_version, deser.direction(), &tmp);
+                let mut tmp_deser = Deserializer::new(deser.context(), &tmp);
                 Ok(Self {
                     value: Deserialize::deserialize(&mut tmp_deser)?,
                 })
@@ -1954,11 +1981,11 @@ pub struct ContentFeatures {
     pub sound_dug: SimpleSoundSpec,
     pub legacy_facedir_simple: bool,
     pub legacy_wallmounted: bool,
-    pub node_dig_prediction: String,
-    pub leveled_max: u8,
-    pub alpha: AlphaMode,
-    pub move_resistance: u8,
-    pub liquid_move_physics: bool,
+    pub node_dig_prediction: Option<String>,
+    pub leveled_max: Option<u8>,
+    pub alpha: Option<AlphaMode>,
+    pub move_resistance: Option<u8>,
+    pub liquid_move_physics: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -2159,12 +2186,73 @@ pub struct MapBlock {
     pub is_underground: bool,
     pub day_night_diff: bool,
     pub generated: bool,
-    pub lighting_complete: u16,
+    pub lighting_complete: Option<u16>,
     pub nodes: MapNodesBulk,
     pub node_metadata: NodeMetadataList, // m_node_metadata.serialize(os, version, disk);
 }
 
 impl Serialize for MapBlock {
+    /// MapBlock is a bit of a nightmare, because the compression algorithm
+    /// and where the compression is applied (to the whole struct, or to
+    /// parts of it) depends on the serialization format version.
+    ///
+    /// For now, only ser_fmt >= 28 is supported.
+    /// For ver 28, only the nodes and nodemeta are compressed using zlib.
+    /// For >= 29, the entire thing is compressed using zstd.
+    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
+        let ver = ser.context().ser_fmt;
+        let real_ser = ser;
+        let mut tmp_ser = VecSerializer::new(real_ser.context(), 32768);
+        let ser = &mut tmp_ser;
+        let header = MapBlockHeader {
+            is_underground: self.is_underground,
+            day_night_diff: self.day_night_diff,
+            generated: self.generated,
+            lighting_complete: self.lighting_complete,
+        };
+        Serialize::serialize(&header, ser)?;
+        if ver >= 29 {
+            Serialize::serialize(&self.nodes, ser)?;
+        } else {
+            // Serialize and compress using zlib
+            let mut inner = VecSerializer::new(ser.context(), 32768);
+            Serialize::serialize(&self.nodes, &mut inner)?;
+            let compressed = compress_zlib(&inner.take());
+            ser.write_bytes(&compressed)?;
+        }
+        if ver >= 29 {
+            Serialize::serialize(&self.node_metadata, ser)?;
+        } else {
+            // Serialize and compress using zlib
+            let mut inner = VecSerializer::new(ser.context(), 32768);
+            Serialize::serialize(&self.node_metadata, &mut inner)?;
+            let compressed = compress_zlib(&inner.take());
+            ser.write_bytes(&compressed)?;
+        }
+        if ver >= 29 {
+            // The whole thing is zstd compressed
+            let tmp = tmp_ser.take();
+            zstd_compress(&tmp, |chunk| real_ser.write_bytes(chunk))?;
+        } else {
+            // Just write it directly
+            let tmp = tmp_ser.take();
+            real_ser.write_bytes(&tmp)?;
+        }
+        Ok(())
+    }
+}
+
+///
+/// This is a helper for MapBlock ser/deser
+/// Not exposed publicly.
+struct MapBlockHeader {
+    pub is_underground: bool,
+    pub day_night_diff: bool,
+    pub generated: bool,
+    pub lighting_complete: Option<u16>,
+}
+
+impl Serialize for MapBlockHeader {
     fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
         let mut flags: u8 = 0;
         if self.is_underground {
@@ -2177,16 +2265,20 @@ impl Serialize for MapBlock {
             flags |= 0x8;
         }
         u8::serialize(&flags, ser)?;
-        u16::serialize(&self.lighting_complete, ser)?;
+        if ser.context().ser_fmt >= 27 {
+            if let Some(lighting_complete) = self.lighting_complete {
+                u16::serialize(&lighting_complete, ser)?;
+            } else {
+                bail!("lighting_complete must be set for ver >= 27");
+            }
+        }
         u8::serialize(&2, ser)?; // content_width == 2
         u8::serialize(&2, ser)?; // params_width == 2
-        Serialize::serialize(&self.nodes, ser)?;
-        Serialize::serialize(&self.node_metadata, ser)?;
         Ok(())
     }
 }
 
-impl Deserialize for MapBlock {
+impl Deserialize for MapBlockHeader {
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         let flags = u8::deserialize(deser)?;
         if flags != (flags & (0x1 | 0x2 | 0x8)) {
@@ -2194,7 +2286,11 @@ impl Deserialize for MapBlock {
                 "Invalid MapBlock flags".to_string(),
             ));
         }
-        let lighting_complete = u16::deserialize(deser)?;
+        let lighting_complete = if deser.context().ser_fmt >= 27 {
+            Some(u16::deserialize(deser)?)
+        } else {
+            None
+        };
         let content_width = u8::deserialize(deser)?;
         let params_width = u8::deserialize(deser)?;
         if content_width != 2 || params_width != 2 {
@@ -2207,9 +2303,61 @@ impl Deserialize for MapBlock {
             day_night_diff: (flags & 0x2) != 0,
             generated: (flags & 0x8) == 0,
             lighting_complete: lighting_complete,
-            nodes: Deserialize::deserialize(deser)?,
-            node_metadata: Deserialize::deserialize(deser)?,
         })
+    }
+}
+
+impl Deserialize for MapBlock {
+    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
+        let ver = deser.context().ser_fmt;
+        if ver < 28 {
+            bail!("Unsupported ser fmt");
+        }
+        // TODO(paradust): I can't make the borrow checker happy with sharing
+        // code here, so for now the code has two different paths.
+        if ver >= 29 {
+            let mut tmp: Vec<u8> = Vec::new();
+            // Decompress to a temporary buffer
+            let bytes_taken = zstd_decompress(deser.peek_all(), |chunk| {
+                tmp.extend_from_slice(chunk);
+                Ok(())
+            })?;
+            deser.take(bytes_taken)?;
+            let deser = &mut Deserializer::new(deser.context(), &tmp);
+            let header: MapBlockHeader = Deserialize::deserialize(deser)?;
+            let nodes = Deserialize::deserialize(deser)?;
+            let node_metadata = Deserialize::deserialize(deser)?;
+            Ok(Self {
+                is_underground: header.is_underground,
+                day_night_diff: header.day_night_diff,
+                generated: header.generated,
+                lighting_complete: header.lighting_complete,
+                nodes,
+                node_metadata,
+            })
+        } else {
+            let header: MapBlockHeader = Deserialize::deserialize(deser)?;
+            let (consumed, nodes_raw) = decompress_zlib(deser.peek_all())?;
+            deser.take(consumed)?;
+            let nodes = {
+                let mut tmp = Deserializer::new(deser.context(), &nodes_raw);
+                Deserialize::deserialize(&mut tmp)?
+            };
+            let (consumed, metadata_raw) = decompress_zlib(deser.peek_all())?;
+            deser.take(consumed)?;
+            let node_metadata = {
+                let mut tmp = Deserializer::new(deser.context(), &metadata_raw);
+                Deserialize::deserialize(&mut tmp)?
+            };
+            Ok(Self {
+                is_underground: header.is_underground,
+                day_night_diff: header.day_night_diff,
+                generated: header.generated,
+                lighting_complete: header.lighting_complete,
+                nodes,
+                node_metadata,
+            })
+        }
     }
 }
 
@@ -2682,8 +2830,7 @@ impl Deserialize for ItemStack {
                 result.wear = stoi(word)?;
                 let line = skip_whitespace(line);
                 if line.len() > 0 {
-                    let mut tmp_deser =
-                        Deserializer::new(deser.protocol_version, deser.direction(), line);
+                    let mut tmp_deser = Deserializer::new(deser.context(), line);
                     result.metadata = ItemStackMetadata::deserialize(&mut tmp_deser)?;
                 }
             }
@@ -2789,6 +2936,12 @@ pub struct AddParticleSpawnerLegacy {
     pub node_param2: u8,
     pub node_tile: u8,
 
+    // Only present in protocol_ver >= 40
+    pub extra: Option<AddParticleSpawnerExtra>,
+}
+
+#[derive(Debug, Clone, PartialEq, MinetestSerialize, MinetestDeserialize)]
+pub struct AddParticleSpawnerExtra {
     pub pos_start_bias: f32,
     pub vel_start_bias: f32,
     pub acc_start_bias: f32,
@@ -3053,12 +3206,13 @@ pub struct ParticleParameters {
     pub animation: TileAnimationParams,
     pub glow: u8,
     pub object_collision: bool,
-    pub node_param0: u16,
-    pub node_param2: u8,
-    pub node_tile: u8,
-    pub drag: v3f,
-    pub jitter: RangedParameter<v3f>,
-    pub bounce: RangedParameter<f32>,
+    // These are omitted in earlier protocol versions
+    pub node_param0: Option<u16>,
+    pub node_param2: Option<u8>,
+    pub node_tile: Option<u8>,
+    pub drag: Option<v3f>,
+    pub jitter: Option<RangedParameter<v3f>>,
+    pub bounce: Option<RangedParameter<f32>>,
 }
 
 #[derive(Debug, Clone, PartialEq, MinetestSerialize, MinetestDeserialize)]

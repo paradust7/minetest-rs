@@ -1,8 +1,9 @@
 use anyhow::bail;
+use anyhow::Result;
 use std::num::TryFromIntError;
-use std::result::Result;
 
 use super::types::CommandDirection;
+use super::types::ProtocolContext;
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum SerializeError {
@@ -20,10 +21,12 @@ impl From<TryFromIntError> for SerializeError {
     }
 }
 
-pub type SerializeResult = anyhow::Result<()>;
+pub type SerializeResult = Result<()>;
 
 pub trait Serializer {
     type Marker;
+
+    fn context(&self) -> ProtocolContext;
 
     // Serializing a ToServer or ToClient command
     fn direction(&self) -> CommandDirection;
@@ -50,38 +53,44 @@ pub trait Serializer {
 
 /// Serialize a Packet to a mutable slice
 pub struct SliceSerializer<'a> {
-    dir: CommandDirection,
+    context: ProtocolContext,
     offset: usize,
     data: &'a mut [u8],
     overflow: bool,
 }
 
 impl<'a> SliceSerializer<'a> {
-    pub fn new(dir: CommandDirection, data: &'a mut [u8]) -> Self {
+    pub fn new(context: ProtocolContext, data: &'a mut [u8]) -> Self {
         Self {
-            dir: dir,
+            context,
             offset: 0,
             data: data,
             overflow: false,
         }
     }
 
-    /// Returns the size of the finished serialized packet
+    /// Returns the finished serialized packet
+    /// This is a subslice of the original data slice provided
     /// If the serializer ran out of space, returns None.
-    pub fn finish(&self) -> Option<usize> {
+    pub fn take(&self) -> Result<&[u8]> {
         if self.overflow {
-            None
-        } else {
-            Some(self.offset)
+            bail!(SerializeError::BufferLimit(
+                "SliceSerializer overflow".to_string()
+            ));
         }
+        Ok(&self.data[..self.offset])
     }
 }
 
 impl<'a> Serializer for SliceSerializer<'a> {
     type Marker = (usize, usize);
 
+    fn context(&self) -> ProtocolContext {
+        self.context
+    }
+
     fn direction(&self) -> CommandDirection {
-        self.dir
+        self.context.dir
     }
 
     fn write_bytes(&mut self, fragment: &[u8]) -> SerializeResult {
@@ -143,14 +152,14 @@ impl<'a> Serializer for SliceSerializer<'a> {
 }
 
 pub struct VecSerializer {
-    dir: CommandDirection,
+    context: ProtocolContext,
     data: Vec<u8>,
 }
 
 impl VecSerializer {
-    pub fn new(dir: CommandDirection, initial_capacity: usize) -> Self {
+    pub fn new(context: ProtocolContext, initial_capacity: usize) -> Self {
         Self {
-            dir: dir,
+            context,
             data: Vec::with_capacity(initial_capacity),
         }
     }
@@ -163,8 +172,12 @@ impl VecSerializer {
 impl Serializer for VecSerializer {
     type Marker = (usize, usize);
 
+    fn context(&self) -> ProtocolContext {
+        self.context
+    }
+
     fn direction(&self) -> CommandDirection {
-        self.dir
+        self.context.dir
     }
 
     fn write_bytes(&mut self, fragment: &[u8]) -> SerializeResult {
@@ -203,13 +216,13 @@ impl Serializer for VecSerializer {
 /// MockSerializer
 /// Computes the size of the serialized output without storing it
 pub struct MockSerializer {
-    dir: CommandDirection,
+    context: ProtocolContext,
     count: usize,
 }
 
 impl MockSerializer {
-    pub fn new(dir: CommandDirection) -> Self {
-        Self { dir: dir, count: 0 }
+    pub fn new(context: ProtocolContext) -> Self {
+        Self { context, count: 0 }
     }
 
     /// How many bytes have been written so far
@@ -221,8 +234,12 @@ impl MockSerializer {
 impl Serializer for MockSerializer {
     type Marker = (usize, usize);
 
+    fn context(&self) -> ProtocolContext {
+        self.context
+    }
+
     fn direction(&self) -> CommandDirection {
-        self.dir
+        self.context.dir
     }
 
     fn write_bytes(&mut self, fragment: &[u8]) -> SerializeResult {

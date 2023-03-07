@@ -8,17 +8,15 @@ use crate::wire::packet::SEQNUM_INITIAL;
 use crate::wire::ser::MockSerializer;
 use crate::wire::ser::Serialize;
 use crate::wire::ser::VecSerializer;
-use crate::wire::types::CommandDirection;
+use crate::wire::types::ProtocolContext;
 
 pub struct SplitSender {
-    dir: CommandDirection,
     next_seqnum: u64,
 }
 
 impl SplitSender {
-    pub fn new(remote_is_server: bool) -> Self {
+    pub fn new() -> Self {
         Self {
-            dir: CommandDirection::for_send(remote_is_server),
             next_seqnum: SEQNUM_INITIAL as u64,
         }
     }
@@ -26,9 +24,13 @@ impl SplitSender {
     /// Push a Command for transmission
     /// This will possibly split it into 1 or more packets.
     #[must_use]
-    pub fn push(&mut self, command: Command) -> anyhow::Result<Vec<InnerBody>> {
+    pub fn push(
+        &mut self,
+        context: ProtocolContext,
+        command: Command,
+    ) -> anyhow::Result<Vec<InnerBody>> {
         let total_size = {
-            let mut ser = MockSerializer::new(self.dir);
+            let mut ser = MockSerializer::new(context);
             Serialize::serialize(&command, &mut ser)?;
             ser.len()
         };
@@ -39,7 +41,7 @@ impl SplitSender {
             result.push(InnerBody::Original(OriginalBody { command }));
         } else {
             // TODO(paradust): Can this extra allocation be avoided?
-            let mut ser = VecSerializer::new(self.dir, total_size);
+            let mut ser = VecSerializer::new(context, total_size);
             Serialize::serialize(&command, &mut ser)?;
             let data = ser.take();
             assert!(data.len() == total_size);

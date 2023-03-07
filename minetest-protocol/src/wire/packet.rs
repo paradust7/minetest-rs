@@ -10,7 +10,15 @@ use super::ser::SerializeResult;
 use super::ser::Serializer;
 
 pub const PROTOCOL_ID: u32 = 0x4f457403;
+
 pub const LATEST_PROTOCOL_VERSION: u16 = 41;
+
+// Serialization format of map data
+pub const SER_FMT_HIGHEST_READ: u8 = 29;
+pub const SER_FMT_HIGHEST_WRITE: u8 = 29;
+pub const SER_FMT_LOWEST_READ: u8 = 28;
+pub const SER_FMT_LOWEST_WRITE: u8 = 29;
+
 pub const MAX_PACKET_SIZE: usize = 512;
 pub const SEQNUM_INITIAL: u16 = 65500;
 pub const PACKET_HEADER_SIZE: usize = 7;
@@ -216,6 +224,13 @@ pub enum InnerBody {
 }
 
 impl InnerBody {
+    pub fn command_ref(&self) -> Option<&Command> {
+        match self {
+            InnerBody::Original(body) => Some(&body.command),
+            _ => None,
+        }
+    }
+
     pub fn into_reliable(self, seqnum: u16) -> PacketBody {
         PacketBody::Reliable(ReliableBody {
             seqnum: seqnum,
@@ -282,6 +297,10 @@ impl PacketBody {
             PacketBody::Inner(inner) => &inner,
         }
     }
+
+    pub fn command_ref(&self) -> Option<&Command> {
+        self.inner().command_ref()
+    }
 }
 
 impl Serialize for PacketBody {
@@ -328,6 +347,13 @@ impl Packet {
 
     pub fn inner(&self) -> &InnerBody {
         self.body.inner()
+    }
+
+    pub fn as_reliable(&self) -> Option<&ReliableBody> {
+        match &self.body {
+            PacketBody::Reliable(rb) => Some(rb),
+            PacketBody::Inner(_) => None,
+        }
     }
 
     pub fn as_control(&self) -> Option<&ControlBody> {
