@@ -2,6 +2,8 @@ extern crate proc_macro2;
 extern crate quote;
 extern crate syn;
 
+use proc_macro2::Ident;
+use proc_macro2::Literal;
 use proc_macro2::TokenStream;
 use quote::quote;
 use quote::quote_spanned;
@@ -19,7 +21,7 @@ use syn::TypeParam;
 pub fn minetest_serialize(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident;
-    let serialize_body = make_serialize_body(&input.data);
+    let serialize_body = make_serialize_body(&name, &input.data);
 
     // The struct must include Serialize in the bounds of any type
     // that need to be serializable.
@@ -41,7 +43,7 @@ pub fn minetest_serialize(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 pub fn minetest_deserialize(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident;
-    let deserialize_body = make_deserialize_body(&input.data);
+    let deserialize_body = make_deserialize_body(&name, &input.data);
 
     // The struct must include Deserialize in the bounds of any type
     // that need to be serializable.
@@ -51,16 +53,16 @@ pub fn minetest_deserialize(input: proc_macro::TokenStream) -> proc_macro::Token
     let expanded = quote! {
         impl #impl_generic Deserialize for #name #name_generic {
             fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
-                Ok(Self {
-                    #deserialize_body
-                })
+                #deserialize_body
             }
         }
     };
     proc_macro::TokenStream::from(expanded)
 }
 
-fn make_serialize_body(data: &Data) -> TokenStream {
+/// For struct, fields are serialized/deserialized in order.
+/// For enum, tags are assumed u8, consecutive, starting with 0.
+fn make_serialize_body(input_name: &Ident, data: &Data) -> TokenStream {
     match *data {
         syn::Data::Struct(ref data) => match data.fields {
             syn::Fields::Named(ref fields) => {
@@ -89,41 +91,102 @@ fn make_serialize_body(data: &Data) -> TokenStream {
                 quote! {}
             }
         },
-        syn::Data::Enum(_) => unimplemented!(),
+        syn::Data::Enum(ref body) => {
+            let recurse = body.variants.iter().enumerate().map(|(i, v)| {
+                if !v.fields.is_empty() {
+                    quote_spanned! {v.span() =>
+                        compile_error!("Cannot handle fields yet");
+                    }
+                } else if v.discriminant.is_some() {
+                    quote_spanned! {v.span() =>
+                        compile_error!("Cannot handle discrimiant yet");
+                    }
+                } else {
+                    let id = &v.ident;
+                    let i = Literal::u8_unsuffixed(i as u8);
+                    quote_spanned! {v.span() =>
+                        #id => #i,
+                    }
+                }
+            });
+            quote! {
+                    use #input_name::*;
+                    let tag = match self {
+                        #(#recurse)*
+                    };
+                    u8::serialize(&tag, ser)?;
+            }
+        }
         syn::Data::Union(_) => unimplemented!(),
     }
 }
 
-fn make_deserialize_body(data: &Data) -> TokenStream {
+fn make_deserialize_body(input_name: &Ident, data: &Data) -> TokenStream {
     match *data {
-        syn::Data::Struct(ref data) => match data.fields {
-            syn::Fields::Named(ref fields) => {
-                let recurse = fields.named.iter().map(|f| {
-                    let name = &f.ident;
-                    quote_spanned! {f.span() =>
-                        #name: Deserialize::deserialize(deser)?,
+        syn::Data::Struct(ref data) => {
+            let inner = match data.fields {
+                syn::Fields::Named(ref fields) => {
+                    let recurse = fields.named.iter().map(|f| {
+                        let name = &f.ident;
+                        quote_spanned! {f.span() =>
+                            #name: Deserialize::deserialize(deser)?,
+                        }
+                    });
+                    quote! {
+                        #(#recurse)*
                     }
-                });
-                quote! {
-                    #(#recurse)*
                 }
-            }
-            syn::Fields::Unnamed(ref fields) => {
-                let recurse = fields.unnamed.iter().enumerate().map(|(i, f)| {
-                    let index = Index::from(i);
-                    quote_spanned! {f.span() =>
-                        #index: Deserialize::deserialize(deser)?,
+                syn::Fields::Unnamed(ref fields) => {
+                    let recurse = fields.unnamed.iter().enumerate().map(|(i, f)| {
+                        let index = Index::from(i);
+                        quote_spanned! {f.span() =>
+                            #index: Deserialize::deserialize(deser)?,
+                        }
+                    });
+                    quote! {
+                        #(#recurse)*
                     }
-                });
-                quote! {
-                    #(#recurse)*
                 }
+                syn::Fields::Unit => {
+                    quote! {}
+                }
+            };
+            quote! {
+                Ok(Self {
+                    #inner
+                })
             }
-            syn::Fields::Unit => {
-                quote! {}
+        }
+        syn::Data::Enum(ref body) => {
+            let recurse = body.variants.iter().enumerate().map(|(i, v)| {
+                if !v.fields.is_empty() {
+                    quote_spanned! {v.span() =>
+                        compile_error!("Cannot handle fields yet");
+                    }
+                } else if v.discriminant.is_some() {
+                    quote_spanned! {v.span() =>
+                        compile_error!("Cannot handle discrimiant yet");
+                    }
+                } else {
+                    let id = &v.ident;
+                    let i = Literal::u8_unsuffixed(i as u8);
+                    quote_spanned! {v.span() =>
+                        #i => #id,
+
+                    }
+                }
+            });
+
+            let input_name_str = Literal::string(&input_name.to_string());
+            quote! {
+                    use #input_name::*;
+                    let tag = u8::deserialize(deser)?;
+                    Ok(match tag {
+                        #(#recurse)*
+                        _ => bail!("Invalid {} tag: {}", #input_name_str, tag),
+                    })
             }
-        },
-        syn::Data::Enum(_) => unimplemented!(),
+        }
         syn::Data::Union(_) => unimplemented!(),
     }
 }

@@ -1631,40 +1631,12 @@ pub struct ItemdefList {
     pub aliases: Array16<ItemAlias>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, MinetestSerialize, MinetestDeserialize)]
 pub enum ItemType {
     None,
     Node,
     Craft,
     Tool,
-}
-
-impl Serialize for ItemType {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        let index = match self {
-            ItemType::None => 0,
-            ItemType::Node => 1,
-            ItemType::Craft => 2,
-            ItemType::Tool => 3,
-        };
-        u8::serialize(&index, ser)?;
-        Ok(())
-    }
-}
-
-impl Deserialize for ItemType {
-    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
-        let index = u8::deserialize(deser)?;
-        match index {
-            0 => Ok(ItemType::None),
-            1 => Ok(ItemType::Node),
-            2 => Ok(ItemType::Craft),
-            3 => Ok(ItemType::Tool),
-            _ => bail!(DeserializeError::InvalidValue(
-                "Invalid ItemType".to_string(),
-            )),
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, MinetestSerialize, MinetestDeserialize)]
@@ -1910,35 +1882,33 @@ impl Deserialize for TileAnimationParams {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, MinetestSerialize, MinetestDeserialize)]
 pub enum AlignStyle {
     Node,
     World,
     UserDefined,
 }
 
-impl Serialize for AlignStyle {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        let typ = match self {
-            AlignStyle::Node => 0,
-            AlignStyle::World => 1,
-            AlignStyle::UserDefined => 2,
-        };
-        u8::serialize(&typ, ser)
-    }
-}
-
-impl Deserialize for AlignStyle {
-    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
-        match u8::deserialize(deser)? {
-            0 => Ok(AlignStyle::Node),
-            1 => Ok(AlignStyle::World),
-            2 => Ok(AlignStyle::UserDefined),
-            _ => bail!(DeserializeError::InvalidValue(
-                "Invalid AlignStyle".to_string(),
-            )),
-        }
-    }
+#[derive(Debug, Clone, PartialEq, MinetestSerialize, MinetestDeserialize)]
+pub enum DrawType {
+    Normal,
+    AirLike,
+    Liquid,
+    FlowingLiquid,
+    GlassLike,
+    AllFaces,
+    AllFacesOptional,
+    TorchLike,
+    SignLike,
+    PlantLike,
+    FenceLike,
+    RailLike,
+    NodeBox,
+    GlassLikeFramed,
+    FireLike,
+    GlassLikeFramedOptional,
+    Mesh,
+    PlantLikeRooted,
 }
 
 #[derive(Debug, Clone, PartialEq, MinetestSerialize, MinetestDeserialize)]
@@ -1948,7 +1918,7 @@ pub struct ContentFeatures {
     pub groups: Array16<Pair<String, s16>>,
     pub param_type: u8,
     pub param_type_2: u8,
-    pub drawtype: u8,
+    pub drawtype: DrawType,
     pub mesh: String,
     pub visual_scale: f32,
     // this was an attempt to be tiledef length, but then they added an extra 6 tiledefs without fixing it
@@ -2097,39 +2067,12 @@ pub struct NodeBoxConnected {
     pub disconnected_sides: Array16<aabb3f>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, MinetestSerialize, MinetestDeserialize)]
 pub enum AlphaMode {
     Blend,
     Clip,
     Opaque,
     LegacyCompat,
-}
-
-impl Serialize for AlphaMode {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        let value = match self {
-            AlphaMode::Blend => 0,
-            AlphaMode::Clip => 1,
-            AlphaMode::Opaque => 2,
-            AlphaMode::LegacyCompat => 3,
-        };
-        u8::serialize(&value, ser)
-    }
-}
-
-impl Deserialize for AlphaMode {
-    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
-        let value = u8::deserialize(deser)?;
-        match value {
-            0 => Ok(AlphaMode::Blend),
-            1 => Ok(AlphaMode::Clip),
-            2 => Ok(AlphaMode::Opaque),
-            3 => Ok(AlphaMode::LegacyCompat),
-            _ => bail!(DeserializeError::InvalidValue(
-                "Invalid AlphaMode".to_string(),
-            )),
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -3159,38 +3102,12 @@ impl Deserialize for ServerParticleTexture {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, MinetestSerialize, MinetestDeserialize)]
 pub enum TweenStyle {
     Fwd,
     Rev,
     Pulse,
     Flicker,
-}
-
-impl Serialize for TweenStyle {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        let value: u8 = match self {
-            TweenStyle::Fwd => 0,
-            TweenStyle::Rev => 1,
-            TweenStyle::Pulse => 2,
-            TweenStyle::Flicker => 3,
-        };
-        u8::serialize(&value, ser)
-    }
-}
-
-impl Deserialize for TweenStyle {
-    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
-        use TweenStyle::*;
-        let value = u8::deserialize(deser)?;
-        Ok(match value {
-            0 => Fwd,
-            1 => Rev,
-            2 => Pulse,
-            3 => Flicker,
-            _ => bail!("Invalid TweenStyle enum value: {}", value),
-        })
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, MinetestSerialize, MinetestDeserialize)]
@@ -3365,7 +3282,7 @@ impl Deserialize for HudFlags {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, MinetestSerialize, MinetestDeserialize)]
 pub enum InteractAction {
     StartDigging,
     StopDigging,
@@ -3373,37 +3290,6 @@ pub enum InteractAction {
     Place,
     Use,
     Activate,
-}
-
-impl Serialize for InteractAction {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        use InteractAction::*;
-        let value: u8 = match self {
-            StartDigging => 0,
-            StopDigging => 1,
-            DiggingCompleted => 2,
-            Place => 3,
-            Use => 4,
-            Activate => 5,
-        };
-        u8::serialize(&value, ser)
-    }
-}
-
-impl Deserialize for InteractAction {
-    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
-        use InteractAction::*;
-        let value: u8 = u8::deserialize(deser)?;
-        Ok(match value {
-            0 => StartDigging,
-            1 => StopDigging,
-            2 => DiggingCompleted,
-            3 => Place,
-            4 => Use,
-            5 => Activate,
-            _ => bail!("Invalid InteractAction: {}", value),
-        })
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

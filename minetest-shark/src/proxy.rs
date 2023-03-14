@@ -19,6 +19,7 @@
 //! commands in both directions, in a human-readable format.
 use anyhow::Result;
 
+use minetest_protocol::peer::peer::PeerError;
 use minetest_protocol::wire::command::ToClientCommand;
 use minetest_protocol::CommandDirection;
 use minetest_protocol::CommandRef;
@@ -87,7 +88,19 @@ impl ProxyAdapterRunner {
         match self.run_inner().await {
             Ok(_) => (),
             Err(err) => {
-                println!("[{}] Disconnected: {:?}", self.id, err)
+                let show_err = if let Some(err) = err.downcast_ref::<PeerError>() {
+                    match err {
+                        PeerError::PeerSentDisconnect => false,
+                        _ => true,
+                    }
+                } else {
+                    true
+                };
+                if show_err {
+                    println!("[{}] Disconnected: {:?}", self.id, err)
+                } else {
+                    println!("[{}] Disconnected", self.id)
+                }
             }
         }
     }
