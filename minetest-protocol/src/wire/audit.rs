@@ -12,9 +12,9 @@
 use anyhow::bail;
 use anyhow::Result;
 
+use super::command::serialize_commandref;
 use super::command::CommandRef;
 use super::command::ToClientCommand;
-use super::ser::Serialize;
 use super::ser::VecSerializer;
 use super::types::ProtocolContext;
 use super::util::decompress_zlib;
@@ -32,7 +32,7 @@ pub fn audit_command<Cmd: CommandRef>(context: ProtocolContext, orig: &[u8], com
         return;
     }
     let mut ser = VecSerializer::new(context, 2 * orig.len());
-    match Serialize::serialize(command, &mut ser) {
+    match serialize_commandref(command, &mut ser) {
         Ok(_) => (),
         Err(err) => {
             println!("AUDIT: Reserialization failed");

@@ -31,7 +31,7 @@ impl SplitSender {
     ) -> anyhow::Result<Vec<InnerBody>> {
         let total_size = {
             let mut ser = MockSerializer::new(context);
-            Serialize::serialize(&command, &mut ser)?;
+            Command::serialize(&command, &mut ser)?;
             ser.len()
         };
         let mut result = Vec::new();
@@ -42,7 +42,7 @@ impl SplitSender {
         } else {
             // TODO(paradust): Can this extra allocation be avoided?
             let mut ser = VecSerializer::new(context, total_size);
-            Serialize::serialize(&command, &mut ser)?;
+            Command::serialize(&command, &mut ser)?;
             let data = ser.take();
             assert!(data.len() == total_size);
             let mut index: usize = 0;

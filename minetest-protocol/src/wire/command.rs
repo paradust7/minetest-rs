@@ -8,6 +8,8 @@ use super::ser::SerializeResult;
 use super::ser::Serializer;
 use super::types::*;
 use anyhow::bail;
+use minetest_protocol_derive::MinetestDeserialize;
+use minetest_protocol_derive::MinetestSerialize;
 use std::ops::Deref;
 
 #[macro_export]
@@ -21,16 +23,18 @@ macro_rules! as_item {
 macro_rules! default_serializer {
     ($spec_ty: ident { }) => {
         impl Serialize for $spec_ty {
-            fn serialize<S: Serializer>(&self, _: &mut S) -> SerializeResult {
+            type Input = Self;
+            fn serialize<S: Serializer>(value: &Self::Input, _: &mut S) -> SerializeResult {
                 Ok(())
             }
         }
     };
     ($spec_ty: ident { $($fname: ident: $ftyp: ty ),+ }) => {
         impl Serialize for $spec_ty {
-            fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
+            type Input = Self;
+            fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
                 $(
-                    Serialize::serialize(&self.$fname, ser)?;
+                    <$ftyp as Serialize>::serialize(&value.$fname, ser)?;
                 )+
                 Ok(())
             }
@@ -42,6 +46,7 @@ macro_rules! default_serializer {
 macro_rules! default_deserializer {
     ($spec_ty: ident { }) => {
         impl Deserialize for $spec_ty {
+            type Output = Self;
             fn deserialize(_deser: &mut Deserializer) -> DeserializeResult<Self> {
                 Ok($spec_ty)
             }
@@ -49,6 +54,7 @@ macro_rules! default_deserializer {
     };
     ($spec_ty: ident { $($fname: ident: $ftyp: ty ),+ }) => {
         impl Deserialize for $spec_ty {
+            type Output = Self;
             fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
                 Ok($spec_ty {
                     $(
@@ -74,22 +80,18 @@ macro_rules! implicit_from {
 #[macro_export]
 macro_rules! proto_struct {
     ($spec_ty: ident { }) => {
-        #[derive(Debug, Clone, PartialEq, Default)]
+        #[derive(Debug, Clone, PartialEq, Default, MinetestSerialize, MinetestDeserialize)]
         pub struct $spec_ty;
-        $crate::default_serializer!($spec_ty { });
-        $crate::default_deserializer!($spec_ty { });
     };
     ($spec_ty: ident {
-        $($fname: ident: $ftype: ty ),+
+        $($fname: ident: $ftype: ty $([$attr:meta])? ),+
     }) => {
         $crate::as_item! {
-            #[derive(Debug, Clone, PartialEq)]
+            #[derive(Debug, Clone, PartialEq, MinetestSerialize, MinetestDeserialize)]
             pub struct $spec_ty {
-               $(pub $fname: $ftype),+
+               $( $(#[$attr])? pub $fname: $ftype),+
             }
         }
-        $crate::default_serializer!($spec_ty { $($fname: $ftype),* });
-        $crate::default_deserializer!($spec_ty { $($fname: $ftype),* });
     };
 }
 
@@ -99,7 +101,7 @@ macro_rules! define_protocol {
      $dir: ident,
      $command_ty: ident => {
          $($name: ident, $id: literal, $channel: literal, $reliable: literal => $spec_ty: ident
-             { $($fname: ident : $ftype: ty),* } ),*
+             { $($fname: ident : $ftype: ty $([$attr:meta])? ),* } ),*
     }) => {
         $crate::as_item! {
             #[derive(Debug, PartialEq, Clone)]
@@ -136,9 +138,10 @@ macro_rules! define_protocol {
 
         $crate::as_item! {
             impl Serialize for $command_ty {
-                fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-                    match self {
-                        $($command_ty::$name(spec) => { u16::serialize(&$id, ser)?; Serialize::serialize(Deref::deref(spec), ser) }),*,
+                type Input = Self;
+                fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+                    match value {
+                        $($command_ty::$name(spec) => { u16::serialize(&$id, ser)?; <$spec_ty as Serialize>::serialize(Deref::deref(spec), ser) }),*,
                     }
                 }
             }
@@ -146,12 +149,13 @@ macro_rules! define_protocol {
 
         $crate::as_item! {
             impl Deserialize for $command_ty {
+                type Output = Self;
                 fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
                     let orig_buffer = deser.peek_all();
-                    let command_id: u16 = Deserialize::deserialize(deser)?;
+                    let command_id = u16::deserialize(deser)?;
                     let dir = deser.direction();
                     let result = match (dir, command_id) {
-                        $( (CommandDirection::$dir, $id) => $command_ty::$name(Box::new(Deserialize::deserialize(deser)?)) ),*,
+                        $( (CommandDirection::$dir, $id) => $command_ty::$name(Box::new(<$spec_ty as Deserialize>::deserialize(deser)?)) ),*,
                         _ => bail!(DeserializeError::BadPacketId(dir, command_id)),
                     };
                     audit_command(deser.context(), orig_buffer, &result);
@@ -160,7 +164,7 @@ macro_rules! define_protocol {
             }
         }
 
-        $($crate::proto_struct!($spec_ty { $($fname: $ftype),* });)*
+        $($crate::proto_struct!($spec_ty { $($fname: $ftype $([$attr])?),* });)*
         $($crate::implicit_from!($command_ty, $name, $spec_ty);)*
 
     };
@@ -238,18 +242,18 @@ define_protocol!(41, 0x4f457403, ToClient, ToClientCommand => {
     TCChatMessage, 0x2F, 0, true => TCChatMessageSpec {
         version: u8,
         message_type: u8,
-        sender: WString,
-        message: WString,
+        sender: String [wrap(WString)],
+        message: String [wrap(WString)],
         timestamp: u64
     },
 
     ActiveObjectRemoveAdd, 0x31, 0, true => ActiveObjectRemoveAddSpec {
-        removed_object_ids: Array16<u16>,
-        added_objects: Array16<AddedObject>
+        removed_object_ids: Vec<u16> [wrap(Array16<u16>)],
+        added_objects: Vec<AddedObject> [wrap(Array16<AddedObject>)]
     },
 
     ActiveObjectMessages, 0x32, 0, true => ActiveObjectMessagesSpec {
-        objects: Array0<ActiveObjectMessage>
+        objects: Vec<ActiveObjectMessage> [wrap(Array0<ActiveObjectMessage>)]
     },
 
     Hp, 0x33, 0, true => HpSpec {
@@ -264,7 +268,7 @@ define_protocol!(41, 0x4f457403, ToClient, ToClientCommand => {
     },
 
     AccessDeniedLegacy, 0x35, 0, true => AccessDeniedLegacySpec {
-        reason: WString
+        reason: String [wrap(WString)]
     },
 
     Fov, 0x36, 0, true => FovSpec {
@@ -281,20 +285,20 @@ define_protocol!(41, 0x4f457403, ToClient, ToClientCommand => {
     Media, 0x38, 2, true => MediaSpec {
         num_bunches: u16,
         bunch_index: u16,
-        files: Array32<MediaFileData>
+        files: Vec<MediaFileData> [wrap(Array32<MediaFileData>)]
     },
 
     Nodedef, 0x3a, 0, true => NodedefSpec {
-        node_def: ZLibCompressed<NodeDefManager>
+        node_def: NodeDefManager [wrap(ZLibCompressed<NodeDefManager>)]
     },
 
     AnnounceMedia, 0x3c, 0, true => AnnounceMediaSpec {
-        files: Array16<MediaAnnouncement>,
+        files: Vec<MediaAnnouncement> [wrap(Array16<MediaAnnouncement>)],
         remote_servers: String
     },
 
     Itemdef, 0x3d, 0, true => ItemdefSpec {
-        item_def: ZLibCompressed<ItemdefList>
+        item_def: ItemdefList [wrap(ZLibCompressed<ItemdefList>)]
     },
 
     PlaySound, 0x3f, 0, true => PlaySoundSpec {
@@ -315,11 +319,11 @@ define_protocol!(41, 0x4f457403, ToClient, ToClientCommand => {
     },
 
     Privileges, 0x41, 0, true => PrivilegesSpec {
-        privileges: Array16<String>
+        privileges: Vec<String> [wrap(Array16<String>)]
     },
 
     InventoryFormspec, 0x42, 0, true => InventoryFormspecSpec {
-        formspec: LongString
+        formspec: String [wrap(LongString)]
     },
 
     DetachedInventory, 0x43, 0, true => DetachedInventorySpec {
@@ -331,7 +335,7 @@ define_protocol!(41, 0x4f457403, ToClient, ToClientCommand => {
     },
 
     ShowFormspec, 0x44, 0, true => ShowFormspecSpec {
-        form_spec: LongString,
+        form_spec: String [wrap(LongString)],
         form_name: String
     },
 
@@ -442,7 +446,7 @@ define_protocol!(41, 0x4f457403, ToClient, ToClientCommand => {
 
     UpdatePlayerList, 0x56, 0, true => UpdatePlayerListSpec {
         typ: u8,
-        players: Array16<String>
+        players: Vec<String> [wrap(Array16<String>)]
     },
 
     TCModchannelMsg, 0x57, 0, true => TCModchannelMsgSpec {
@@ -459,7 +463,7 @@ define_protocol!(41, 0x4f457403, ToClient, ToClientCommand => {
     },
 
     NodemetaChanged, 0x59, 0, true => NodemetaChangedSpec {
-        list: ZLibCompressed<AbsNodeMetadataList>
+        list: AbsNodeMetadataList [wrap(ZLibCompressed<AbsNodeMetadataList>)]
     },
 
     SetSun, 0x5a, 0, true => SetSunSpec {
@@ -475,8 +479,8 @@ define_protocol!(41, 0x4f457403, ToClient, ToClientCommand => {
     },
 
     SrpBytesSB, 0x60, 0, true => SrpBytesSBSpec {
-         s: BinaryData16,
-         b: BinaryData16
+         s: Vec<u8> [wrap(BinaryData16)],
+         b: Vec<u8> [wrap(BinaryData16)]
     },
 
     FormspecPrepend, 0x61, 0, true => FormspecPrependSpec {
@@ -530,11 +534,11 @@ define_protocol!(41, 0x4f457403, ToServer, ToServerCommand => {
     },
 
     Gotblocks, 0x24, 2, true => GotblocksSpec {
-        blocks: Array8<v3s16>
+        blocks: Vec<v3s16> [wrap(Array8<v3s16>)]
     },
 
     Deletedblocks, 0x25, 2, true => DeletedblocksSpec {
-        blocks: Array8<v3s16>
+        blocks: Vec<v3s16> [wrap(Array8<v3s16>)]
     },
 
     InventoryAction, 0x31, 0, true => InventoryActionSpec {
@@ -542,7 +546,7 @@ define_protocol!(41, 0x4f457403, ToServer, ToServerCommand => {
     },
 
     TSChatMessage, 0x32, 0, true => TSChatMessageSpec {
-        message: WString
+        message: String [wrap(WString)]
     },
 
     Damage, 0x35, 0, true => DamageSpec {
@@ -560,32 +564,32 @@ define_protocol!(41, 0x4f457403, ToServer, ToServerCommand => {
     Interact, 0x39, 0, true => InteractSpec {
         action: InteractAction,
         item_index: u16,
-        pointed_thing: Wrapped32<PointedThing>,
+        pointed_thing: PointedThing [wrap(Wrapped32<PointedThing>)],
         player_pos: PlayerPos
     },
 
     RemovedSounds, 0x3a, 2, true => RemovedSoundsSpec {
-        ids: Array16<s32>
+        ids: Vec<s32> [wrap(Array16<s32>)]
     },
 
     NodemetaFields, 0x3b, 0, true => NodemetaFieldsSpec {
         p: v3s16,
         form_name: String,
         // (name, value)
-        fields: Array16<Pair<String, LongString>>
+        fields: Vec<(String, String)> [wrap(Array16<Pair<String, LongString>>)]
     },
 
     InventoryFields, 0x3c, 0, true => InventoryFieldsSpec {
         client_formspec_name: String,
-        fields: Array16<Pair<String, LongString>>
+        fields: Vec<(String, String)> [wrap(Array16<Pair<String, LongString>>)]
     },
 
     RequestMedia, 0x40, 1, true => RequestMediaSpec {
-        files: Array16<String>
+        files: Vec<String> [wrap(Array16<String>)]
     },
 
     HaveMedia, 0x41, 2, true => HaveMediaSpec {
-        tokens: Array8<u32>
+        tokens: Vec<u32> [wrap(Array8<u32>)]
     },
 
     ClientReady, 0x43, 1, true => ClientReadySpec {
@@ -598,18 +602,18 @@ define_protocol!(41, 0x4f457403, ToServer, ToServerCommand => {
     },
 
     FirstSrp, 0x50, 1, true => FirstSrpSpec {
-        salt: BinaryData16,
-        verification_key: BinaryData16,
+        salt: Vec<u8> [wrap(BinaryData16)],
+        verification_key: Vec<u8> [wrap(BinaryData16)],
         is_empty: bool
     },
 
     SrpBytesA, 0x51, 1, true => SrpBytesASpec {
-        bytes_a: BinaryData16,
+        bytes_a: Vec<u8> [wrap(BinaryData16)],
         based_on: u8
     },
 
     SrpBytesM, 0x52, 1, true => SrpBytesMSpec {
-        bytes_m: BinaryData16
+        bytes_m: Vec<u8> [wrap(BinaryData16)]
     },
 
     UpdateClientInfo, 0x53, 1, true => UpdateClientInfoSpec {
@@ -633,9 +637,25 @@ pub trait CommandProperties {
     fn command_name(&self) -> &'static str;
 }
 
-pub trait CommandRef: CommandProperties + std::fmt::Debug + Serialize + Deserialize {
+/// This only exists to make "audit_command" generic, but it
+/// wasn't as clean as I hoped.
+/// TODO(paradust): Factor this out.
+pub trait CommandRef: CommandProperties + std::fmt::Debug {
     fn toserver_ref(&self) -> Option<&ToServerCommand>;
     fn toclient_ref(&self) -> Option<&ToClientCommand>;
+}
+
+pub fn serialize_commandref<Cmd: CommandRef, S: Serializer>(
+    cmd: &Cmd,
+    ser: &mut S,
+) -> SerializeResult {
+    if let Some(r) = cmd.toserver_ref() {
+        ToServerCommand::serialize(r, ser)?;
+    }
+    if let Some(r) = cmd.toclient_ref() {
+        ToClientCommand::serialize(r, ser)?;
+    }
+    Ok(())
 }
 
 impl CommandProperties for Command {
@@ -705,19 +725,21 @@ impl CommandRef for ToServerCommand {
 }
 
 impl Serialize for Command {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        match self {
-            Command::ToServer(c) => Serialize::serialize(c, ser),
-            Command::ToClient(c) => Serialize::serialize(c, ser),
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        match value {
+            Command::ToServer(c) => ToServerCommand::serialize(c, ser),
+            Command::ToClient(c) => ToClientCommand::serialize(c, ser),
         }
     }
 }
 
 impl Deserialize for Command {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         Ok(match deser.direction() {
-            CommandDirection::ToClient => Command::ToClient(Deserialize::deserialize(deser)?),
-            CommandDirection::ToServer => Command::ToServer(Deserialize::deserialize(deser)?),
+            CommandDirection::ToClient => Command::ToClient(ToClientCommand::deserialize(deser)?),
+            CommandDirection::ToServer => Command::ToServer(ToServerCommand::deserialize(deser)?),
         })
     }
 }

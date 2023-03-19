@@ -1,6 +1,6 @@
 [package]
 name = "minetest-shark"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2021"
 authors = ["paradust"]
 license = "MIT"
@@ -18,7 +18,7 @@ test = false
 bench = false
 
 [dependencies]
-minetest-protocol = { version = "0.1.3", path = "../minetest-protocol" }
+minetest-protocol = { version = "0.1.4", path = "../minetest-protocol" }
 anyhow = { version = "1.0.69", features = ["backtrace"] }
 tokio = { version = "1.21.2", features = ["full"] }
 clap = { version = "4.1.8", features = ["derive"] }

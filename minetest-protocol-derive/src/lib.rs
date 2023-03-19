@@ -13,11 +13,13 @@ use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::Data;
 use syn::DeriveInput;
+use syn::Field;
 use syn::Generics;
 use syn::Index;
+use syn::Type;
 use syn::TypeParam;
 
-#[proc_macro_derive(MinetestSerialize)]
+#[proc_macro_derive(MinetestSerialize, attributes(wrap))]
 pub fn minetest_serialize(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident;
@@ -27,10 +29,12 @@ pub fn minetest_serialize(input: proc_macro::TokenStream) -> proc_macro::TokenSt
     // that need to be serializable.
     let impl_generic = input.generics.to_token_stream();
     let name_generic = strip_generic_bounds(&input.generics).to_token_stream();
+    let where_generic = input.generics.where_clause;
 
     let expanded = quote! {
-        impl #impl_generic Serialize for #name #name_generic {
-            fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
+        impl #impl_generic Serialize for #name #name_generic #where_generic {
+            type Input = Self;
+            fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
                 #serialize_body
                 Ok(())
             }
@@ -39,7 +43,7 @@ pub fn minetest_serialize(input: proc_macro::TokenStream) -> proc_macro::TokenSt
     proc_macro::TokenStream::from(expanded)
 }
 
-#[proc_macro_derive(MinetestDeserialize)]
+#[proc_macro_derive(MinetestDeserialize, attributes(wrap))]
 pub fn minetest_deserialize(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident;
@@ -49,15 +53,27 @@ pub fn minetest_deserialize(input: proc_macro::TokenStream) -> proc_macro::Token
     // that need to be serializable.
     let impl_generic = input.generics.to_token_stream();
     let name_generic = strip_generic_bounds(&input.generics).to_token_stream();
+    let where_generic = input.generics.where_clause;
 
     let expanded = quote! {
-        impl #impl_generic Deserialize for #name #name_generic {
+        impl #impl_generic Deserialize for #name #name_generic #where_generic {
+            type Output = Self;
             fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
                 #deserialize_body
             }
         }
     };
     proc_macro::TokenStream::from(expanded)
+}
+
+fn get_wrapped_type(f: &Field) -> Type {
+    let mut ty = f.ty.clone();
+    for attr in f.attrs.iter() {
+        if attr.path.is_ident("wrap") {
+            ty = attr.parse_args::<Type>().unwrap();
+        }
+    }
+    ty
 }
 
 /// For struct, fields are serialized/deserialized in order.
@@ -68,8 +84,9 @@ fn make_serialize_body(input_name: &Ident, data: &Data) -> TokenStream {
             syn::Fields::Named(ref fields) => {
                 let recurse = fields.named.iter().map(|f| {
                     let name = &f.ident;
+                    let ty = get_wrapped_type(f);
                     quote_spanned! {f.span() =>
-                        Serialize::serialize(&self.#name, ser)?;
+                        <#ty as Serialize>::serialize(&value.#name, ser)?;
                     }
                 });
                 quote! {
@@ -79,8 +96,9 @@ fn make_serialize_body(input_name: &Ident, data: &Data) -> TokenStream {
             syn::Fields::Unnamed(ref fields) => {
                 let recurse = fields.unnamed.iter().enumerate().map(|(i, f)| {
                     let index = Index::from(i);
+                    let ty = get_wrapped_type(f);
                     quote_spanned! {f.span() =>
-                        Serialize::serialize(&self.#index, ser)?;
+                        <#ty as Serialize>::serialize(&value.#index, ser)?;
                     }
                 });
                 quote! {
@@ -111,7 +129,7 @@ fn make_serialize_body(input_name: &Ident, data: &Data) -> TokenStream {
             });
             quote! {
                     use #input_name::*;
-                    let tag = match self {
+                    let tag = match value {
                         #(#recurse)*
                     };
                     u8::serialize(&tag, ser)?;
@@ -128,8 +146,9 @@ fn make_deserialize_body(input_name: &Ident, data: &Data) -> TokenStream {
                 syn::Fields::Named(ref fields) => {
                     let recurse = fields.named.iter().map(|f| {
                         let name = &f.ident;
+                        let ty = get_wrapped_type(f);
                         quote_spanned! {f.span() =>
-                            #name: Deserialize::deserialize(deser)?,
+                            #name: <#ty as Deserialize>::deserialize(deser)?,
                         }
                     });
                     quote! {
@@ -139,8 +158,9 @@ fn make_deserialize_body(input_name: &Ident, data: &Data) -> TokenStream {
                 syn::Fields::Unnamed(ref fields) => {
                     let recurse = fields.unnamed.iter().enumerate().map(|(i, f)| {
                         let index = Index::from(i);
+                        let ty = get_wrapped_type(f);
                         quote_spanned! {f.span() =>
-                            #index: Deserialize::deserialize(deser)?,
+                            #index: <#ty as Deserialize>::deserialize(deser)?,
                         }
                     });
                     quote! {

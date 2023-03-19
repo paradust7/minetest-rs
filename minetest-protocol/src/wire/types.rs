@@ -37,6 +37,7 @@ use super::util::split_by_whitespace;
 use super::util::stoi;
 use super::util::zstd_compress;
 use super::util::zstd_decompress;
+use std::marker::PhantomData;
 use std::ops::Deref;
 use std::ops::DerefMut;
 use std::ops::Div;
@@ -138,6 +139,20 @@ impl ByteString {
     }
 }
 
+impl Deref for ByteString {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        self.as_bytes()
+    }
+}
+
+impl DerefMut for ByteString {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.0.as_mut_slice()
+    }
+}
+
 impl From<Vec<u8>> for ByteString {
     fn from(value: Vec<u8>) -> Self {
         Self(value)
@@ -152,13 +167,15 @@ impl From<&[u8]> for ByteString {
 
 // Basic types
 impl Serialize for bool {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        let val: u8 = if *self { 1 } else { 0 };
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        let val: u8 = if *value { 1 } else { 0 };
         ser.write_bytes(&val.to_be_bytes()[..])
     }
 }
 
 impl Deserialize for bool {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         let b = deser.take_n::<1>()?[0];
         Ok(match b {
@@ -170,109 +187,137 @@ impl Deserialize for bool {
 }
 
 impl Serialize for u8 {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        ser.write_bytes(&self.to_be_bytes()[..])
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        ser.write_bytes(&value.to_be_bytes()[..])
     }
 }
 
 impl Deserialize for u8 {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         Ok(deser.take_n::<1>()?[0])
     }
 }
 
 impl Serialize for u16 {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        ser.write_bytes(&self.to_be_bytes()[..])
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        ser.write_bytes(&value.to_be_bytes()[..])
     }
 }
 
 impl Deserialize for u16 {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         Ok(u16::from_be_bytes(deser.take_n::<2>()?))
     }
 }
 
 impl Serialize for u32 {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        ser.write_bytes(&self.to_be_bytes()[..])
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        ser.write_bytes(&value.to_be_bytes()[..])
     }
 }
 
 impl Deserialize for u32 {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         Ok(u32::from_be_bytes(deser.take_n::<4>()?))
     }
 }
 
 impl Serialize for u64 {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        ser.write_bytes(&self.to_be_bytes()[..])
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        ser.write_bytes(&value.to_be_bytes()[..])
     }
 }
 
 impl Deserialize for u64 {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         Ok(u64::from_be_bytes(deser.take_n::<8>()?))
     }
 }
 
 impl Serialize for i8 {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        ser.write_bytes(&self.to_be_bytes()[..])
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        ser.write_bytes(&value.to_be_bytes()[..])
     }
 }
 
 impl Deserialize for i8 {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         Ok(deser.take(1)?[0] as i8)
     }
 }
 
 impl Serialize for i16 {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        ser.write_bytes(&self.to_be_bytes()[..])
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        ser.write_bytes(&value.to_be_bytes()[..])
     }
 }
 
 impl Deserialize for i16 {
+    type Output = Self;
+
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         Ok(u16::from_be_bytes(deser.take_n::<2>()?) as i16)
     }
 }
 
 impl Serialize for i32 {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        ser.write_bytes(&self.to_be_bytes()[..])
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        ser.write_bytes(&value.to_be_bytes()[..])
     }
 }
 
 impl Deserialize for i32 {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         Ok(u32::from_be_bytes(deser.take_n::<4>()?) as i32)
     }
 }
 
 impl Serialize for f32 {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        ser.write_bytes(&self.to_be_bytes()[..])
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        ser.write_bytes(&value.to_be_bytes()[..])
     }
 }
 
 impl Deserialize for f32 {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         Ok(f32::from_be_bytes(deser.take_n::<4>()?))
     }
 }
 
+/// str implements Serialize but not Deserialize
+impl Serialize for str {
+    type Input = Self;
+
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        u16::serialize(&u16::try_from(value.len())?, ser)?;
+        ser.write_bytes(value.as_bytes())
+    }
+}
+
 impl Serialize for String {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        Serialize::serialize(&u16::try_from(self.len())?, ser)?;
-        ser.write_bytes(self.as_bytes())
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        <str as Serialize>::serialize(&value, ser)
     }
 }
 
 impl Deserialize for String {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         let num_bytes = u16::deserialize(deser)? as usize;
         match std::str::from_utf8(deser.take(num_bytes)?) {
@@ -283,66 +328,37 @@ impl Deserialize for String {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct LongString {
-    pub string: String,
-}
+pub struct LongString(PhantomData<String>);
 
 impl Serialize for LongString {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        Serialize::serialize(&u32::try_from(self.string.len())?, ser)?;
-        ser.write_bytes(&self.string.as_bytes())
+    type Input = String;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        u32::serialize(&u32::try_from(value.len())?, ser)?;
+        ser.write_bytes(&value.as_bytes())
     }
 }
 
 impl Deserialize for LongString {
-    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
+    type Output = String;
+    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self::Output> {
         let num_bytes = u32::deserialize(deser)? as usize;
         match std::str::from_utf8(deser.take(num_bytes)?) {
-            Ok(s) => Ok(LongString {
-                string: s.to_string(),
-            }),
+            Ok(s) => Ok(s.to_string()),
             Err(u) => bail!(DeserializeError::InvalidValue(u.to_string())),
         }
     }
 }
 
-impl Deref for LongString {
-    type Target = String;
-    fn deref(&self) -> &Self::Target {
-        &self.string
-    }
-}
-
-impl DerefMut for LongString {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.string
-    }
-}
-
 /// Corresponds to std::wstring in C++ land
 #[derive(Debug, Clone, PartialEq)]
-pub struct WString {
-    pub string: String,
-}
-
-impl Deref for WString {
-    type Target = String;
-    fn deref(&self) -> &Self::Target {
-        &self.string
-    }
-}
-
-impl DerefMut for WString {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.string
-    }
-}
+pub struct WString(PhantomData<String>);
 
 impl Serialize for WString {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        let enc: Vec<u16> = self.string.encode_utf16().collect();
+    type Input = String;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        let enc: Vec<u16> = value.encode_utf16().collect();
 
-        Serialize::serialize(&u16::try_from(enc.len())?, ser)?;
+        u16::serialize(&u16::try_from(enc.len())?, ser)?;
         // TODO: This could be made more efficient.
         let mut buf: Vec<u8> = vec![0; 2 * enc.len()];
         let mut index: usize = 0;
@@ -356,7 +372,8 @@ impl Serialize for WString {
 }
 
 impl Deserialize for WString {
-    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
+    type Output = String;
+    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self::Output> {
         let length = u16::deserialize(deser)? as usize;
         let raw = deser.take(2 * length)?;
         let mut seq: Vec<u16> = vec![0; length];
@@ -364,7 +381,7 @@ impl Deserialize for WString {
             seq[i] = u16::from_be_bytes(raw[2 * i..2 * i + 2].try_into().unwrap());
         }
         match String::from_utf16(&seq) {
-            Ok(s) => Ok(WString { string: s }),
+            Ok(s) => Ok(s),
             Err(err) => bail!(DeserializeError::InvalidValue(err.to_string())),
         }
     }
@@ -375,6 +392,12 @@ impl Deserialize for WString {
 pub struct v2f {
     pub x: f32,
     pub y: f32,
+}
+
+impl v2f {
+    pub fn new(x: f32, y: f32) -> Self {
+        Self { x, y }
+    }
 }
 
 #[allow(non_camel_case_types)]
@@ -389,6 +412,7 @@ impl v3f {
     pub fn new(x: f32, y: f32, z: f32) -> Self {
         Self { x, y, z }
     }
+
     pub fn as_v3s32(&self) -> v3s32 {
         v3s32 {
             x: self.x.round() as i32,
@@ -427,11 +451,23 @@ pub struct v2u32 {
     pub y: u32,
 }
 
+impl v2u32 {
+    pub fn new(x: u32, y: u32) -> Self {
+        Self { x, y }
+    }
+}
+
 #[allow(non_camel_case_types)]
 #[derive(Debug, Clone, PartialEq, MinetestSerialize, MinetestDeserialize)]
 pub struct v2s16 {
     pub x: s16,
     pub y: s16,
+}
+
+impl v2s16 {
+    pub fn new(x: s16, y: s16) -> Self {
+        Self { x, y }
+    }
 }
 
 #[allow(non_camel_case_types)]
@@ -453,6 +489,12 @@ impl v3s16 {
 pub struct v2s32 {
     pub x: s32,
     pub y: s32,
+}
+
+impl v2s32 {
+    pub fn new(x: s32, y: s32) -> Self {
+        Self { x, y }
+    }
 }
 
 #[allow(non_camel_case_types)]
@@ -481,16 +523,23 @@ pub struct SColor {
     pub a: u8,
 }
 
+impl SColor {
+    pub fn new(r: u8, g: u8, b: u8, a: u8) -> Self {
+        Self { r, g, b, a }
+    }
+}
+
 // Wrapped in a String (really a BinaryData16) with a 16-bit length
 #[derive(Debug, Clone, PartialEq)]
 pub struct Wrapped16<T> {
-    pub value: T,
+    phantom: PhantomData<T>,
 }
 
 impl<T: Serialize> Serialize for Wrapped16<T> {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
+    type Input = T::Input;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
         let marker = ser.write_marker(2)?;
-        Serialize::serialize(&self.value, ser)?;
+        <T as Serialize>::serialize(value, ser)?;
         let wlen: u16 = u16::try_from(ser.marker_distance(&marker))?;
         ser.set_marker(marker, &wlen.to_be_bytes()[..])?;
         Ok(())
@@ -498,25 +547,25 @@ impl<T: Serialize> Serialize for Wrapped16<T> {
 }
 
 impl<T: Deserialize> Deserialize for Wrapped16<T> {
-    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
+    type Output = T::Output;
+    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self::Output> {
         let wlen = u16::deserialize(deser)?;
         let mut restricted_deser = deser.slice(wlen as usize)?;
-        Ok(Self {
-            value: Deserialize::deserialize(&mut restricted_deser)?,
-        })
+        <T as Deserialize>::deserialize(&mut restricted_deser)
     }
 }
 
-// Wrapped in a String32 (really a BinaryData32)
+// Wrapped in a String (really a BinaryData16) with a 16-bit length
 #[derive(Debug, Clone, PartialEq)]
 pub struct Wrapped32<T> {
-    pub value: T,
+    phantom: PhantomData<T>,
 }
 
 impl<T: Serialize> Serialize for Wrapped32<T> {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
+    type Input = T::Input;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
         let marker = ser.write_marker(4)?;
-        Serialize::serialize(&self.value, ser)?;
+        <T as Serialize>::serialize(value, ser)?;
         let wlen: u32 = u32::try_from(ser.marker_distance(&marker))?;
         ser.set_marker(marker, &wlen.to_be_bytes()[..])?;
         Ok(())
@@ -524,140 +573,116 @@ impl<T: Serialize> Serialize for Wrapped32<T> {
 }
 
 impl<T: Deserialize> Deserialize for Wrapped32<T> {
-    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
+    type Output = T::Output;
+    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self::Output> {
         let wlen = u32::deserialize(deser)?;
         let mut restricted_deser = deser.slice(wlen as usize)?;
-        Ok(Self {
-            value: Deserialize::deserialize(&mut restricted_deser)?,
-        })
+        <T as Deserialize>::deserialize(&mut restricted_deser)
     }
 }
 
-/// Binary data preceded by a U16 size
 #[derive(Debug, Clone, PartialEq)]
-pub struct BinaryData16 {
-    pub data: Vec<u8>,
-}
-
-impl BinaryData16 {
-    pub fn new(data: Vec<u8>) -> Self {
-        Self { data }
-    }
-}
+pub struct BinaryData16;
 
 impl Serialize for BinaryData16 {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        Serialize::serialize(&u16::try_from(self.data.len())?, ser)?;
-        ser.write_bytes(&self.data)?;
+    type Input = Vec<u8>;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        u16::serialize(&u16::try_from(value.len())?, ser)?;
+        ser.write_bytes(value)?;
         Ok(())
     }
 }
 
 impl Deserialize for BinaryData16 {
-    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
+    type Output = Vec<u8>;
+    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self::Output> {
         let num_bytes = u16::deserialize(deser)? as usize;
-        Ok(BinaryData16 {
-            data: Vec::from(deser.take(num_bytes)?),
-        })
+        Ok(Vec::from(deser.take(num_bytes)?))
     }
 }
 
 /// Binary data preceded by a U32 size
 #[derive(Debug, Clone, PartialEq)]
-pub struct BinaryData32 {
-    pub data: Vec<u8>,
-}
+pub struct BinaryData32;
 
 impl Serialize for BinaryData32 {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        Serialize::serialize(&u32::try_from(self.data.len())?, ser)?;
-        ser.write_bytes(&self.data)?;
+    type Input = Vec<u8>;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        u32::serialize(&u32::try_from(value.len())?, ser)?;
+        ser.write_bytes(value)?;
         Ok(())
     }
 }
 
 impl Deserialize for BinaryData32 {
-    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
+    type Output = Vec<u8>;
+    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self::Output> {
         let num_bytes = u32::deserialize(deser)? as usize;
-        Ok(BinaryData32 {
-            data: Vec::from(deser.take(num_bytes)?),
-        })
+        Ok(Vec::from(deser.take(num_bytes)?))
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct FixedArray<const COUNT: usize, T> {
-    pub entries: [T; COUNT],
+pub struct FixedArray<const COUNT: usize, T>
+where
+    T: Serialize<Input = T>,
+    T: Deserialize<Output = T>,
+{
+    phantom: PhantomData<T>,
 }
 
-impl<const COUNT: usize, T: Serialize> Serialize for FixedArray<COUNT, T> {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        for ent in self.entries.iter() {
-            Serialize::serialize(ent, ser)?;
+impl<const COUNT: usize, T> Serialize for FixedArray<COUNT, T>
+where
+    T: Serialize<Input = T>,
+    T: Deserialize<Output = T>,
+{
+    type Input = [T; COUNT];
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        for ent in value.iter() {
+            <T as Serialize>::serialize(ent, ser)?;
         }
         Ok(())
     }
 }
 
-impl<const COUNT: usize, T: Deserialize> Deserialize for FixedArray<COUNT, T> {
-    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
+impl<const COUNT: usize, T> Deserialize for FixedArray<COUNT, T>
+where
+    T: Serialize<Input = T>,
+    T: Deserialize<Output = T>,
+{
+    type Output = [T; COUNT];
+    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self::Output> {
         let mut entries = Vec::with_capacity(COUNT);
         for _ in 0..COUNT {
-            entries.push(Deserialize::deserialize(deser)?);
+            entries.push(<T as Deserialize>::deserialize(deser)?);
         }
         match entries.try_into() {
-            Ok(entries) => Ok(Self { entries }),
+            Ok(entries) => Ok(entries),
             Err(_) => bail!(DeserializeError::InvalidValue("FixedArray bug".to_string())),
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct FixedBinaryData<const COUNT: usize> {
-    pub data: Vec<u8>,
-}
-
-impl<const COUNT: usize> Serialize for FixedBinaryData<COUNT> {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        if COUNT != 0 && self.data.len() != COUNT {
-            bail!(SerializeError::InvalidValue(format!(
-                "FixedBinaryData<{}> incorrect data length {}",
-                COUNT,
-                self.data.len()
-            )));
-        }
-        ser.write_bytes(&self.data[..])
-    }
-}
-
-impl<const COUNT: usize> Deserialize for FixedBinaryData<COUNT> {
-    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
-        let raw: &[u8] = if COUNT == 0 {
-            deser.take_all()
-        } else {
-            deser.take(COUNT)?
-        };
-        Ok(FixedBinaryData::<COUNT> {
-            data: Vec::from(raw),
-        })
-    }
-}
-
 /// Option is used for optional values at the end of a structure.
 /// Once Option is used, all following must be Option as well.
-impl<T: Serialize> Serialize for Option<T> {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        match self {
-            Some(ref v) => Serialize::serialize(v, ser),
+impl<T: Serialize> Serialize for Option<T>
+where
+    <T as Serialize>::Input: Sized,
+{
+    type Input = Option<T::Input>;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        match value {
+            Some(ref v) => <T as Serialize>::serialize(v, ser),
             None => Ok(()),
         }
     }
 }
 
 impl<T: Deserialize> Deserialize for Option<T> {
-    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
+    type Output = Option<T::Output>;
+    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self::Output> {
         if deser.remaining() > 0 {
-            Ok(Some(T::deserialize(deser)?))
+            Ok(Some(<T as Deserialize>::deserialize(deser)?))
         } else {
             Ok(None)
         }
@@ -666,19 +691,22 @@ impl<T: Deserialize> Deserialize for Option<T> {
 
 // An Optional value controlled by a u16 size parameter.
 // Unlike Option, this can appear anywhere in the message.
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum Option16<T> {
     None,
     Some(T),
 }
-impl<T: Serialize> Serialize for Option16<T> {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        match self {
+impl<T: Serialize> Serialize for Option16<T>
+where
+    <T as Serialize>::Input: Sized,
+{
+    type Input = Option16<T::Input>;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        match value {
             Option16::None => u16::serialize(&0u16, ser),
             Option16::Some(value) => {
                 let mut buf = VecSerializer::new(ser.context(), 64);
-                Serialize::serialize(value, &mut buf)?;
+                <T as Serialize>::serialize(value, &mut buf)?;
                 let buf = buf.take();
                 let num_bytes = u16::try_from(buf.len())?;
                 u16::serialize(&num_bytes, ser)?;
@@ -690,12 +718,13 @@ impl<T: Serialize> Serialize for Option16<T> {
 }
 
 impl<T: Deserialize> Deserialize for Option16<T> {
-    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
+    type Output = Option16<T::Output>;
+    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self::Output> {
         match u16::deserialize(deser)? {
             0 => Ok(Option16::None),
             num_bytes => {
                 let mut buf = deser.slice(num_bytes as usize)?;
-                Ok(Option16::Some(Deserialize::deserialize(&mut buf)?))
+                Ok(Option16::Some(<T as Deserialize>::deserialize(&mut buf)?))
             }
         }
     }
@@ -705,7 +734,8 @@ impl<T: Deserialize> Deserialize for Option16<T> {
 pub struct AddedObject {
     pub id: u16,
     pub typ: u8,
-    pub init_data: Wrapped32<GenericInitData>,
+    #[wrap(Wrapped32<GenericInitData>)]
+    pub init_data: GenericInitData,
 }
 
 /// This corresponds to GenericCAO::Initialize in minetest
@@ -718,15 +748,18 @@ pub struct GenericInitData {
     pub position: v3f,
     pub rotation: v3f,
     pub hp: u16,
-    pub messages: Array8<Wrapped32<ActiveObjectCommand>>,
+    #[wrap(Array8<Wrapped32<ActiveObjectCommand>>)]
+    pub messages: Vec<ActiveObjectCommand>,
 }
 
 #[derive(Debug, Clone, PartialEq, MinetestSerialize, MinetestDeserialize)]
 pub struct ActiveObjectMessage {
     pub id: u16,
-    pub data: Wrapped16<ActiveObjectCommand>,
+    #[wrap(Wrapped16<ActiveObjectCommand>)]
+    pub data: ActiveObjectCommand,
 }
 
+// TODO(paradust): Handle this in derive macros
 #[derive(Debug, Clone, PartialEq)]
 pub enum ActiveObjectCommand {
     SetProperties(AOCSetProperties),
@@ -779,45 +812,53 @@ impl ActiveObjectCommand {
 }
 
 impl Serialize for ActiveObjectCommand {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        u8::serialize(&self.get_command_prefix(), ser)?;
-        match self {
-            ActiveObjectCommand::SetProperties(v) => Serialize::serialize(v, ser)?,
-            ActiveObjectCommand::UpdatePosition(v) => Serialize::serialize(v, ser)?,
-            ActiveObjectCommand::SetTextureMod(v) => Serialize::serialize(v, ser)?,
-            ActiveObjectCommand::SetSprite(v) => Serialize::serialize(v, ser)?,
-            ActiveObjectCommand::SetPhysicsOverride(v) => Serialize::serialize(v, ser)?,
-            ActiveObjectCommand::SetAnimation(v) => Serialize::serialize(v, ser)?,
-            ActiveObjectCommand::SetAnimationSpeed(v) => Serialize::serialize(v, ser)?,
-            ActiveObjectCommand::SetBonePosition(v) => Serialize::serialize(v, ser)?,
-            ActiveObjectCommand::AttachTo(v) => Serialize::serialize(v, ser)?,
-            ActiveObjectCommand::Punched(v) => Serialize::serialize(v, ser)?,
-            ActiveObjectCommand::UpdateArmorGroups(v) => Serialize::serialize(v, ser)?,
-            ActiveObjectCommand::SpawnInfant(v) => Serialize::serialize(v, ser)?,
-            ActiveObjectCommand::Obsolete1(v) => Serialize::serialize(v, ser)?,
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        u8::serialize(&value.get_command_prefix(), ser)?;
+        match value {
+            ActiveObjectCommand::SetProperties(v) => AOCSetProperties::serialize(v, ser)?,
+            ActiveObjectCommand::UpdatePosition(v) => AOCUpdatePosition::serialize(v, ser)?,
+            ActiveObjectCommand::SetTextureMod(v) => AOCSetTextureMod::serialize(v, ser)?,
+            ActiveObjectCommand::SetSprite(v) => AOCSetSprite::serialize(v, ser)?,
+            ActiveObjectCommand::SetPhysicsOverride(v) => AOCSetPhysicsOverride::serialize(v, ser)?,
+            ActiveObjectCommand::SetAnimation(v) => AOCSetAnimation::serialize(v, ser)?,
+            ActiveObjectCommand::SetAnimationSpeed(v) => AOCSetAnimationSpeed::serialize(v, ser)?,
+            ActiveObjectCommand::SetBonePosition(v) => AOCSetBonePosition::serialize(v, ser)?,
+            ActiveObjectCommand::AttachTo(v) => AOCAttachTo::serialize(v, ser)?,
+            ActiveObjectCommand::Punched(v) => AOCPunched::serialize(v, ser)?,
+            ActiveObjectCommand::UpdateArmorGroups(v) => AOCUpdateArmorGroups::serialize(v, ser)?,
+            ActiveObjectCommand::SpawnInfant(v) => AOCSpawnInfant::serialize(v, ser)?,
+            ActiveObjectCommand::Obsolete1(v) => AOCObsolete1::serialize(v, ser)?,
         }
         Ok(())
     }
 }
 
 impl Deserialize for ActiveObjectCommand {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         use ActiveObjectCommand::*;
         let cmd = u8::deserialize(deser)?;
         Ok(match cmd {
-            AO_CMD_SET_PROPERTIES => SetProperties(Deserialize::deserialize(deser)?),
-            AO_CMD_UPDATE_POSITION => UpdatePosition(Deserialize::deserialize(deser)?),
-            AO_CMD_SET_TEXTURE_MOD => SetTextureMod(Deserialize::deserialize(deser)?),
-            AO_CMD_SET_SPRITE => SetSprite(Deserialize::deserialize(deser)?),
-            AO_CMD_PUNCHED => Punched(Deserialize::deserialize(deser)?),
-            AO_CMD_UPDATE_ARMOR_GROUPS => UpdateArmorGroups(Deserialize::deserialize(deser)?),
-            AO_CMD_SET_ANIMATION => SetAnimation(Deserialize::deserialize(deser)?),
-            AO_CMD_SET_BONE_POSITION => SetBonePosition(Deserialize::deserialize(deser)?),
-            AO_CMD_ATTACH_TO => AttachTo(Deserialize::deserialize(deser)?),
-            AO_CMD_SET_PHYSICS_OVERRIDE => SetPhysicsOverride(Deserialize::deserialize(deser)?),
-            AO_CMD_OBSOLETE1 => Obsolete1(Deserialize::deserialize(deser)?),
-            AO_CMD_SPAWN_INFANT => SpawnInfant(Deserialize::deserialize(deser)?),
-            AO_CMD_SET_ANIMATION_SPEED => SetAnimationSpeed(Deserialize::deserialize(deser)?),
+            AO_CMD_SET_PROPERTIES => SetProperties(AOCSetProperties::deserialize(deser)?),
+            AO_CMD_UPDATE_POSITION => UpdatePosition(AOCUpdatePosition::deserialize(deser)?),
+            AO_CMD_SET_TEXTURE_MOD => SetTextureMod(AOCSetTextureMod::deserialize(deser)?),
+            AO_CMD_SET_SPRITE => SetSprite(AOCSetSprite::deserialize(deser)?),
+            AO_CMD_PUNCHED => Punched(AOCPunched::deserialize(deser)?),
+            AO_CMD_UPDATE_ARMOR_GROUPS => {
+                UpdateArmorGroups(AOCUpdateArmorGroups::deserialize(deser)?)
+            }
+            AO_CMD_SET_ANIMATION => SetAnimation(AOCSetAnimation::deserialize(deser)?),
+            AO_CMD_SET_BONE_POSITION => SetBonePosition(AOCSetBonePosition::deserialize(deser)?),
+            AO_CMD_ATTACH_TO => AttachTo(AOCAttachTo::deserialize(deser)?),
+            AO_CMD_SET_PHYSICS_OVERRIDE => {
+                SetPhysicsOverride(AOCSetPhysicsOverride::deserialize(deser)?)
+            }
+            AO_CMD_OBSOLETE1 => Obsolete1(AOCObsolete1::deserialize(deser)?),
+            AO_CMD_SPAWN_INFANT => SpawnInfant(AOCSpawnInfant::deserialize(deser)?),
+            AO_CMD_SET_ANIMATION_SPEED => {
+                SetAnimationSpeed(AOCSetAnimationSpeed::deserialize(deser)?)
+            }
             _ => bail!("ActiveObjectCommand: Invalid cmd={}", cmd),
         })
     }
@@ -839,14 +880,16 @@ pub struct ObjectProperties {
     pub pointable: bool,
     pub visual: String,
     pub visual_size: v3f,
-    pub textures: Array16<String>,
+    #[wrap(Array16<String>)]
+    pub textures: Vec<String>,
     pub spritediv: v2s16,
     pub initial_sprite_basepos: v2s16,
     pub is_visible: bool,
     pub makes_footstep_sound: bool,
     pub automatic_rotate: f32,
     pub mesh: String,
-    pub colors: Array16<SColor>,
+    #[wrap(Array16<SColor>)]
+    pub colors: Vec<SColor>,
     pub collide_with_objects: bool,
     pub stepheight: f32,
     pub automatic_face_movement_dir: bool,
@@ -940,7 +983,8 @@ pub struct AOCPunched {
 #[derive(Debug, Clone, PartialEq, MinetestSerialize, MinetestDeserialize)]
 pub struct AOCUpdateArmorGroups {
     // name -> rating
-    pub ratings: Array16<Pair<String, s16>>,
+    #[wrap(Array16<Pair<String, s16>>)]
+    pub ratings: Vec<(String, s16)>,
 }
 
 #[derive(Debug, Clone, PartialEq, MinetestSerialize, MinetestDeserialize)]
@@ -955,107 +999,113 @@ pub struct AOCObsolete1 {}
 /// An array of items with no specified length.
 /// The length is determined by buffer end.
 #[derive(Debug, Clone, PartialEq)]
-pub struct Array0<T> {
-    pub vec: Vec<T>,
-}
+pub struct Array0<T>(PhantomData<T>);
 
-impl<T: Serialize> Serialize for Array0<T> {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        for v in self.vec.iter() {
-            Serialize::serialize(v, ser)?;
+impl<T: Serialize> Serialize for Array0<T>
+where
+    <T as Serialize>::Input: Sized,
+{
+    type Input = Vec<T::Input>;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        for v in value.iter() {
+            <T as Serialize>::serialize(v, ser)?;
         }
         Ok(())
     }
 }
 
 impl<T: Deserialize> Deserialize for Array0<T> {
-    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
-        let mut vec: Vec<T> = Vec::new();
+    type Output = Vec<T::Output>;
+    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self::Output> {
+        let mut vec = Vec::new();
         while deser.remaining() > 0 {
-            vec.push(<T>::deserialize(deser)?);
+            vec.push(<T as Deserialize>::deserialize(deser)?);
         }
-        Ok(Array0::<T> { vec: vec })
+        Ok(vec)
     }
 }
 
 /// An array of items with a u8 length prefix
 #[derive(Debug, Clone, PartialEq)]
-pub struct Array8<T> {
-    pub vec: Vec<T>,
-}
+pub struct Array8<T>(PhantomData<T>);
 
-impl<T: Serialize> Serialize for Array8<T> {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        Serialize::serialize(&u8::try_from(self.vec.len())?, ser)?;
-        for v in self.vec.iter() {
-            Serialize::serialize(v, ser)?;
+impl<T: Serialize> Serialize for Array8<T>
+where
+    <T as Serialize>::Input: Sized,
+{
+    type Input = Vec<T::Input>;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        u8::serialize(&u8::try_from(value.len())?, ser)?;
+        for v in value.iter() {
+            <T as Serialize>::serialize(v, ser)?;
         }
         Ok(())
     }
 }
 
 impl<T: Deserialize> Deserialize for Array8<T> {
-    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
+    type Output = Vec<T::Output>;
+    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self::Output> {
         let length = u8::deserialize(deser)? as usize;
-        let mut vec: Vec<T> = Vec::with_capacity(length);
+        let mut vec = Vec::with_capacity(length);
         for _ in 0..length {
-            vec.push(<T>::deserialize(deser)?);
+            vec.push(<T as Deserialize>::deserialize(deser)?);
         }
-        Ok(Array8::<T> { vec: vec })
+        Ok(vec)
     }
 }
 
 /// An array of items with a u16 length prefix
 #[derive(Debug, Clone, PartialEq)]
-pub struct Array16<T> {
-    pub vec: Vec<T>,
-}
+pub struct Array16<T>(PhantomData<T>);
 
-impl<T> Array16<T> {
-    pub fn len(&self) -> usize {
-        self.vec.len()
-    }
-}
-
-impl<T: Serialize> Serialize for Array16<T> {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        Serialize::serialize(&u16::try_from(self.vec.len())?, ser)?;
-        for v in self.vec.iter() {
-            Serialize::serialize(v, ser)?;
+impl<T: Serialize> Serialize for Array16<T>
+where
+    <T as Serialize>::Input: Sized,
+{
+    type Input = Vec<T::Input>;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        u16::serialize(&u16::try_from(value.len())?, ser)?;
+        for v in value.iter() {
+            <T as Serialize>::serialize(v, ser)?;
         }
         Ok(())
     }
 }
 
 impl<T: Deserialize> Deserialize for Array16<T> {
-    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
+    type Output = Vec<T::Output>;
+    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self::Output> {
         let length = u16::deserialize(deser)? as usize;
-        let mut vec: Vec<T> = Vec::with_capacity(length);
+        let mut vec = Vec::with_capacity(length);
         for _ in 0..length {
-            vec.push(<T>::deserialize(deser)?);
+            vec.push(<T as Deserialize>::deserialize(deser)?);
         }
-        Ok(Array16::<T> { vec: vec })
+        Ok(vec)
     }
 }
 
 /// An array of items with a u32 length prefix
 #[derive(Debug, Clone, PartialEq)]
-pub struct Array32<T> {
-    pub vec: Vec<T>,
-}
+pub struct Array32<T>(PhantomData<T>);
 
-impl<T: Serialize> Serialize for Array32<T> {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        Serialize::serialize(&u32::try_from(self.vec.len())?, ser)?;
-        for v in self.vec.iter() {
-            Serialize::serialize(v, ser)?;
+impl<T: Serialize> Serialize for Array32<T>
+where
+    <T as Serialize>::Input: Sized,
+{
+    type Input = Vec<T::Input>;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        u32::serialize(&u32::try_from(value.len())?, ser)?;
+        for v in value.iter() {
+            <T as Serialize>::serialize(v, ser)?;
         }
         Ok(())
     }
 }
 
 impl<T: Deserialize> Deserialize for Array32<T> {
-    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
+    type Output = Vec<T::Output>;
+    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self::Output> {
         let length = u32::deserialize(deser)? as usize;
         // Sanity check to prevent memory DoS
         if length > deser.remaining() {
@@ -1063,18 +1113,19 @@ impl<T: Deserialize> Deserialize for Array32<T> {
                 "Array32 length too long".to_string(),
             ));
         }
-        let mut vec: Vec<T> = Vec::with_capacity(length);
+        let mut vec = Vec::with_capacity(length);
         for _ in 0..length {
-            vec.push(<T>::deserialize(deser)?);
+            vec.push(<T as Deserialize>::deserialize(deser)?);
         }
-        Ok(Array32::<T> { vec: vec })
+        Ok(vec)
     }
 }
 
 #[derive(Debug, Clone, PartialEq, MinetestSerialize, MinetestDeserialize)]
 pub struct MediaFileData {
     pub name: String,
-    pub data: BinaryData32,
+    #[wrap(BinaryData32)]
+    pub data: Vec<u8>,
 }
 
 #[derive(Debug, Clone, PartialEq, MinetestSerialize, MinetestDeserialize)]
@@ -1141,33 +1192,35 @@ pub struct PlayerPos {
 }
 
 impl Serialize for PlayerPos {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        let s_position = (self.position * 100f32).as_v3s32();
-        let s_speed = (self.speed * 100f32).as_v3s32();
-        let s_pitch = (self.pitch * 100f32).round() as s32;
-        let s_yaw = (self.yaw * 100f32).round() as s32;
-        let s_fov = (self.fov * 80f32).round() as u8;
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        let s_position = (value.position * 100f32).as_v3s32();
+        let s_speed = (value.speed * 100f32).as_v3s32();
+        let s_pitch = (value.pitch * 100f32).round() as s32;
+        let s_yaw = (value.yaw * 100f32).round() as s32;
+        let s_fov = (value.fov * 80f32).round() as u8;
 
-        Serialize::serialize(&s_position, ser)?;
-        Serialize::serialize(&s_speed, ser)?;
-        Serialize::serialize(&s_pitch, ser)?;
-        Serialize::serialize(&s_yaw, ser)?;
-        Serialize::serialize(&self.keys_pressed, ser)?;
-        Serialize::serialize(&s_fov, ser)?;
-        Serialize::serialize(&self.wanted_range, ser)?;
+        v3s32::serialize(&s_position, ser)?;
+        v3s32::serialize(&s_speed, ser)?;
+        i32::serialize(&s_pitch, ser)?;
+        i32::serialize(&s_yaw, ser)?;
+        u32::serialize(&value.keys_pressed, ser)?;
+        u8::serialize(&s_fov, ser)?;
+        u8::serialize(&value.wanted_range, ser)?;
         Ok(())
     }
 }
 
 impl Deserialize for PlayerPos {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
-        let s_position: v3s32 = Deserialize::deserialize(deser)?;
-        let s_speed: v3s32 = Deserialize::deserialize(deser)?;
-        let s_pitch: s32 = Deserialize::deserialize(deser)?;
-        let s_yaw: s32 = Deserialize::deserialize(deser)?;
-        let keys_pressed: u32 = Deserialize::deserialize(deser)?;
-        let s_fov: u8 = Deserialize::deserialize(deser)?;
-        let wanted_range: u8 = Deserialize::deserialize(deser)?;
+        let s_position = v3s32::deserialize(deser)?;
+        let s_speed = v3s32::deserialize(deser)?;
+        let s_pitch = s32::deserialize(deser)?;
+        let s_yaw = s32::deserialize(deser)?;
+        let keys_pressed = u32::deserialize(deser)?;
+        let s_fov = u8::deserialize(deser)?;
+        let wanted_range = u8::deserialize(deser)?;
         Ok(PlayerPos {
             position: s_position.as_v3f() / 100f32,
             speed: s_speed.as_v3f() / 100f32,
@@ -1181,25 +1234,28 @@ impl Deserialize for PlayerPos {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Pair<T1, T2> {
-    pub first: T1,
-    pub second: T2,
-}
+pub struct Pair<T1, T2>(PhantomData<(T1, T2)>);
 
-impl<T1: Serialize, T2: Serialize> Serialize for Pair<T1, T2> {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        Serialize::serialize(&self.first, ser)?;
-        Serialize::serialize(&self.second, ser)?;
+impl<T1: Serialize, T2: Serialize> Serialize for Pair<T1, T2>
+where
+    <T1 as Serialize>::Input: Sized,
+    <T2 as Serialize>::Input: Sized,
+{
+    type Input = (T1::Input, T2::Input);
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        <T1 as Serialize>::serialize(&value.0, ser)?;
+        <T2 as Serialize>::serialize(&value.1, ser)?;
         Ok(())
     }
 }
 
 impl<T1: Deserialize, T2: Deserialize> Deserialize for Pair<T1, T2> {
-    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
-        Ok(Self {
-            first: Deserialize::deserialize(deser)?,
-            second: Deserialize::deserialize(deser)?,
-        })
+    type Output = (T1::Output, T2::Output);
+    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self::Output> {
+        Ok((
+            <T1 as Deserialize>::deserialize(deser)?,
+            <T2 as Deserialize>::deserialize(deser)?,
+        ))
     }
 }
 
@@ -1221,9 +1277,10 @@ pub enum AccessDeniedCode {
 }
 
 impl Serialize for AccessDeniedCode {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
         use AccessDeniedCode::*;
-        match self {
+        match value {
             WrongPassword => u8::serialize(&0, ser),
             UnexpectedData => u8::serialize(&1, ser),
             Singleplayer => u8::serialize(&2, ser),
@@ -1256,6 +1313,7 @@ impl Serialize for AccessDeniedCode {
 }
 
 impl Deserialize for AccessDeniedCode {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         use AccessDeniedCode::*;
         let deny_code = u8::deserialize(deser)?;
@@ -1324,64 +1382,65 @@ pub enum HudStat {
 }
 
 impl Serialize for HudStat {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
         use HudStat::*;
-        match self {
+        match value {
             Pos(v) => {
                 u8::serialize(&0, ser)?;
-                Serialize::serialize(v, ser)?;
+                v2f::serialize(v, ser)?;
             }
             Name(v) => {
                 u8::serialize(&1, ser)?;
-                Serialize::serialize(v, ser)?;
+                String::serialize(v, ser)?;
             }
             Scale(v) => {
                 u8::serialize(&2, ser)?;
-                Serialize::serialize(v, ser)?;
+                v2f::serialize(v, ser)?;
             }
             Text(v) => {
                 u8::serialize(&3, ser)?;
-                Serialize::serialize(v, ser)?;
+                String::serialize(v, ser)?;
             }
             Number(v) => {
                 u8::serialize(&4, ser)?;
-                Serialize::serialize(v, ser)?;
+                u32::serialize(v, ser)?;
             }
             Item(v) => {
                 u8::serialize(&5, ser)?;
-                Serialize::serialize(v, ser)?;
+                u32::serialize(v, ser)?;
             }
             Dir(v) => {
                 u8::serialize(&6, ser)?;
-                Serialize::serialize(v, ser)?;
+                u32::serialize(v, ser)?;
             }
             Align(v) => {
                 u8::serialize(&7, ser)?;
-                Serialize::serialize(v, ser)?;
+                v2f::serialize(v, ser)?;
             }
             Offset(v) => {
                 u8::serialize(&8, ser)?;
-                Serialize::serialize(v, ser)?;
+                v2f::serialize(v, ser)?;
             }
             WorldPos(v) => {
                 u8::serialize(&9, ser)?;
-                Serialize::serialize(v, ser)?;
+                v3f::serialize(v, ser)?;
             }
             Size(v) => {
                 u8::serialize(&10, ser)?;
-                Serialize::serialize(v, ser)?;
+                v2s32::serialize(v, ser)?;
             }
             ZIndex(v) => {
                 u8::serialize(&11, ser)?;
-                Serialize::serialize(v, ser)?;
+                u32::serialize(v, ser)?;
             }
             Text2(v) => {
                 u8::serialize(&12, ser)?;
-                Serialize::serialize(v, ser)?;
+                String::serialize(v, ser)?;
             }
             Style(v) => {
                 u8::serialize(&13, ser)?;
-                Serialize::serialize(v, ser)?;
+                u32::serialize(v, ser)?;
             }
         }
         Ok(())
@@ -1389,24 +1448,25 @@ impl Serialize for HudStat {
 }
 
 impl Deserialize for HudStat {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         use HudStat::*;
         let stat = u8::deserialize(deser)?;
         match stat {
-            0 => Ok(Pos(Deserialize::deserialize(deser)?)),
-            1 => Ok(Name(Deserialize::deserialize(deser)?)),
-            2 => Ok(Scale(Deserialize::deserialize(deser)?)),
-            3 => Ok(Text(Deserialize::deserialize(deser)?)),
-            4 => Ok(Number(Deserialize::deserialize(deser)?)),
-            5 => Ok(Item(Deserialize::deserialize(deser)?)),
-            6 => Ok(Dir(Deserialize::deserialize(deser)?)),
-            7 => Ok(Align(Deserialize::deserialize(deser)?)),
-            8 => Ok(Offset(Deserialize::deserialize(deser)?)),
-            9 => Ok(WorldPos(Deserialize::deserialize(deser)?)),
-            10 => Ok(Size(Deserialize::deserialize(deser)?)),
-            11 => Ok(ZIndex(Deserialize::deserialize(deser)?)),
-            12 => Ok(Text2(Deserialize::deserialize(deser)?)),
-            13 => Ok(Style(Deserialize::deserialize(deser)?)),
+            0 => Ok(Pos(v2f::deserialize(deser)?)),
+            1 => Ok(Name(String::deserialize(deser)?)),
+            2 => Ok(Scale(v2f::deserialize(deser)?)),
+            3 => Ok(Text(String::deserialize(deser)?)),
+            4 => Ok(Number(u32::deserialize(deser)?)),
+            5 => Ok(Item(u32::deserialize(deser)?)),
+            6 => Ok(Dir(u32::deserialize(deser)?)),
+            7 => Ok(Align(v2f::deserialize(deser)?)),
+            8 => Ok(Offset(v2f::deserialize(deser)?)),
+            9 => Ok(WorldPos(v3f::deserialize(deser)?)),
+            10 => Ok(Size(v2s32::deserialize(deser)?)),
+            11 => Ok(ZIndex(u32::deserialize(deser)?)),
+            12 => Ok(Text2(String::deserialize(deser)?)),
+            13 => Ok(Style(u32::deserialize(deser)?)),
             _ => bail!(DeserializeError::InvalidValue(String::from(
                 "HudStat invalid stat",
             ))),
@@ -1417,60 +1477,68 @@ impl Deserialize for HudStat {
 #[derive(Debug, Clone, PartialEq)]
 pub struct SkyboxParams {
     pub bgcolor: SColor,
-    pub typ: String,
     pub clouds: bool,
     pub fog_sun_tint: SColor,
     pub fog_moon_tint: SColor,
     pub fog_tint_type: String,
-    // If skybox_type == "skybox"
-    pub textures: Option<Array16<String>>,
-    // If skybox_type == "regular"
-    pub sky_color: Option<SkyColor>,
+    pub data: SkyboxData,
     pub body_orbit_tilt: Option<f32>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum SkyboxData {
+    None,                  // If skybox_type == "plain"
+    Textures(Vec<String>), // If skybox_type == "skybox"
+    Color(SkyColor),       // If skybox_type == "regular"
+}
+
 impl Serialize for SkyboxParams {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        Serialize::serialize(&self.bgcolor, ser)?;
-        Serialize::serialize(&self.typ, ser)?;
-        Serialize::serialize(&self.clouds, ser)?;
-        Serialize::serialize(&self.fog_sun_tint, ser)?;
-        Serialize::serialize(&self.fog_moon_tint, ser)?;
-        Serialize::serialize(&self.fog_tint_type, ser)?;
-        if self.typ == "skybox" {
-            Serialize::serialize(&self.textures, ser)?;
-        } else if self.typ == "regular" {
-            Serialize::serialize(&self.sky_color, ser)?;
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        SColor::serialize(&value.bgcolor, ser)?;
+        let skybox_type = match &value.data {
+            SkyboxData::None => "plain",
+            SkyboxData::Textures(..) => "skybox",
+            SkyboxData::Color(..) => "regular",
+        };
+        str::serialize(skybox_type, ser)?;
+        bool::serialize(&value.clouds, ser)?;
+        SColor::serialize(&value.fog_sun_tint, ser)?;
+        SColor::serialize(&value.fog_moon_tint, ser)?;
+        String::serialize(&value.fog_tint_type, ser)?;
+        match &value.data {
+            SkyboxData::None => (),
+            SkyboxData::Textures(v) => <Array16<String> as Serialize>::serialize(v, ser)?,
+            SkyboxData::Color(v) => SkyColor::serialize(v, ser)?,
         }
-        if let Some(body_orbit_tilt) = self.body_orbit_tilt {
-            Serialize::serialize(&body_orbit_tilt, ser)?;
-        }
+        <Option<f32> as Serialize>::serialize(&value.body_orbit_tilt, ser)?;
         Ok(())
     }
 }
 
 impl Deserialize for SkyboxParams {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
-        let bgcolor: SColor = Deserialize::deserialize(deser)?;
-        let typ: String = Deserialize::deserialize(deser)?;
+        let bgcolor = SColor::deserialize(deser)?;
+        let typ = String::deserialize(deser)?;
         Ok(SkyboxParams {
             bgcolor: bgcolor,
-            typ: typ.clone(),
-            clouds: Deserialize::deserialize(deser)?,
-            fog_sun_tint: Deserialize::deserialize(deser)?,
-            fog_moon_tint: Deserialize::deserialize(deser)?,
-            fog_tint_type: Deserialize::deserialize(deser)?,
-            textures: if typ == "skybox" {
-                Some(Deserialize::deserialize(deser)?)
-            } else {
-                None
+            clouds: bool::deserialize(deser)?,
+            fog_sun_tint: SColor::deserialize(deser)?,
+            fog_moon_tint: SColor::deserialize(deser)?,
+            fog_tint_type: String::deserialize(deser)?,
+            data: {
+                if typ == "skybox" {
+                    SkyboxData::Textures(<Array16<String> as Deserialize>::deserialize(deser)?)
+                } else if typ == "regular" {
+                    SkyboxData::Color(SkyColor::deserialize(deser)?)
+                } else if typ == "plain" {
+                    SkyboxData::None
+                } else {
+                    bail!("Invalid skybox type: {:?}", typ)
+                }
             },
-            sky_color: if typ == "regular" {
-                Some(Deserialize::deserialize(deser)?)
-            } else {
-                None
-            },
-            body_orbit_tilt: Deserialize::deserialize(deser)?,
+            body_orbit_tilt: <Option<f32> as Deserialize>::deserialize(deser)?,
         })
     }
 }
@@ -1482,25 +1550,27 @@ pub struct MinimapModeList {
 }
 
 impl Serialize for MinimapModeList {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
         // The length of the list is a u16 which precedes `mode`,
         // which makes the layout not fit into any usual pattern.
-        Serialize::serialize(&u16::try_from(self.vec.len())?, ser)?;
-        Serialize::serialize(&self.mode, ser)?;
-        for v in self.vec.iter() {
-            Serialize::serialize(v, ser)?;
+        u16::serialize(&u16::try_from(value.vec.len())?, ser)?;
+        u16::serialize(&value.mode, ser)?;
+        for v in value.vec.iter() {
+            MinimapMode::serialize(v, ser)?;
         }
         Ok(())
     }
 }
 
 impl Deserialize for MinimapModeList {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
-        let count: u16 = Deserialize::deserialize(deser)?;
-        let mode: u16 = Deserialize::deserialize(deser)?;
+        let count = u16::deserialize(deser)?;
+        let mode = u16::deserialize(deser)?;
         let mut vec: Vec<MinimapMode> = Vec::with_capacity(count as usize);
         for _ in 0..count {
-            vec.push(Deserialize::deserialize(deser)?);
+            vec.push(MinimapMode::deserialize(deser)?);
         }
         Ok(MinimapModeList {
             mode: mode,
@@ -1517,24 +1587,26 @@ pub struct AuthMechsBitset {
 }
 
 impl Serialize for AuthMechsBitset {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        let mut value: u32 = 0;
-        if self.legacy_password {
-            value |= 1;
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        let mut bits: u32 = 0;
+        if value.legacy_password {
+            bits |= 1;
         }
-        if self.srp {
-            value |= 2;
+        if value.srp {
+            bits |= 2;
         }
-        if self.first_srp {
-            value |= 4;
+        if value.first_srp {
+            bits |= 4;
         }
-        Serialize::serialize(&value, ser)
+        u32::serialize(&bits, ser)
     }
 }
 
 impl Deserialize for AuthMechsBitset {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
-        let value: u32 = Deserialize::deserialize(deser)?;
+        let value = u32::deserialize(deser)?;
         Ok(AuthMechsBitset {
             legacy_password: (value & 1) != 0,
             srp: (value & 2) != 0,
@@ -1544,38 +1616,36 @@ impl Deserialize for AuthMechsBitset {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ZLibCompressed<T> {
-    pub value: T,
-}
+pub struct ZLibCompressed<T>(PhantomData<T>);
 
 impl<T: Serialize> Serialize for ZLibCompressed<T> {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
+    type Input = T::Input;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
         // TODO(paradust): Performance nightmare.
 
         // Serialize 'value' to a temporary buffer, and then compress
         let mut tmp = VecSerializer::new(ser.context(), 1024);
-        Serialize::serialize(&self.value, &mut tmp)?;
+        <T as Serialize>::serialize(&value, &mut tmp)?;
         let tmp = tmp.take();
         let tmp = miniz_oxide::deflate::compress_to_vec_zlib(&tmp, 6);
 
         // Write the size as a u32, followed by the data
-        Serialize::serialize(&u32::try_from(tmp.len())?, ser)?;
+        u32::serialize(&u32::try_from(tmp.len())?, ser)?;
         ser.write_bytes(&tmp)?;
         Ok(())
     }
 }
 
 impl<T: Deserialize> Deserialize for ZLibCompressed<T> {
-    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
+    type Output = T::Output;
+    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self::Output> {
         let num_bytes = u32::deserialize(deser)? as usize;
         let data = deser.take(num_bytes)?;
         // TODO(paradust): DANGEROUS. There is no decompression size bound.
         match miniz_oxide::inflate::decompress_to_vec_zlib(&data) {
             Ok(decompressed) => {
                 let mut tmp = Deserializer::new(deser.context(), &decompressed);
-                Ok(Self {
-                    value: Deserialize::deserialize(&mut tmp)?,
-                })
+                Ok(<T as Deserialize>::deserialize(&mut tmp)?)
             }
             Err(err) => bail!(DeserializeError::DecompressionFailed(err.to_string())),
         }
@@ -1583,16 +1653,15 @@ impl<T: Deserialize> Deserialize for ZLibCompressed<T> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ZStdCompressed<T> {
-    pub value: T,
-}
+pub struct ZStdCompressed<T>(PhantomData<T>);
 
 impl<T: Serialize> Serialize for ZStdCompressed<T> {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
+    type Input = T::Input;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
         // Serialize 'value' into a temporary buffer
         // TODO(paradust): Performance concern, could stream instead
         let mut tmp = VecSerializer::new(ser.context(), 65536);
-        Serialize::serialize(&self.value, &mut tmp)?;
+        <T as Serialize>::serialize(value, &mut tmp)?;
         let tmp = tmp.take();
         match zstd_compress(&tmp, |chunk| {
             ser.write_bytes(chunk)?;
@@ -1605,7 +1674,8 @@ impl<T: Serialize> Serialize for ZStdCompressed<T> {
 }
 
 impl<T: Deserialize> Deserialize for ZStdCompressed<T> {
-    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
+    type Output = T::Output;
+    fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self::Output> {
         // Decompress to a temporary buffer
         let mut tmp: Vec<u8> = Vec::with_capacity(65536);
         match zstd_decompress(deser.peek_all(), |chunk| {
@@ -1615,9 +1685,7 @@ impl<T: Deserialize> Deserialize for ZStdCompressed<T> {
             Ok(consumed) => {
                 deser.take(consumed)?;
                 let mut tmp_deser = Deserializer::new(deser.context(), &tmp);
-                Ok(Self {
-                    value: Deserialize::deserialize(&mut tmp_deser)?,
-                })
+                Ok(<T as Deserialize>::deserialize(&mut tmp_deser)?)
             }
             Err(err) => bail!(DeserializeError::DecompressionFailed(err.to_string())),
         }
@@ -1627,8 +1695,10 @@ impl<T: Deserialize> Deserialize for ZStdCompressed<T> {
 #[derive(Debug, Clone, PartialEq, MinetestSerialize, MinetestDeserialize)]
 pub struct ItemdefList {
     pub itemdef_manager_version: u8,
-    pub defs: Array16<Wrapped16<ItemDef>>,
-    pub aliases: Array16<ItemAlias>,
+    #[wrap(Array16<Wrapped16<ItemDef>>)]
+    pub defs: Vec<ItemDef>,
+    #[wrap(Array16<ItemAlias>)]
+    pub aliases: Vec<ItemAlias>,
 }
 
 #[derive(Debug, Clone, PartialEq, MinetestSerialize, MinetestDeserialize)]
@@ -1644,7 +1714,8 @@ pub struct ToolGroupCap {
     pub uses: s16,
     pub maxlevel: s16,
     // (level, time)
-    pub times: Array32<Pair<s16, f32>>,
+    #[wrap(Array32<Pair<s16, f32>>)]
+    pub times: Vec<(s16, f32)>,
 }
 
 #[derive(Debug, Clone, PartialEq, MinetestSerialize, MinetestDeserialize)]
@@ -1653,9 +1724,11 @@ pub struct ToolCapabilities {
     pub full_punch_interval: f32,
     pub max_drop_level: s16,
     // (name, tool group cap)
-    pub group_caps: Array32<Pair<String, ToolGroupCap>>,
+    #[wrap(Array32<Pair<String, ToolGroupCap>>)]
+    pub group_caps: Vec<(String, ToolGroupCap)>,
     // (name, rating)
-    pub damage_groups: Array32<Pair<String, s16>>,
+    #[wrap(Array32<Pair<String, s16>>)]
+    pub damage_groups: Vec<(String, s16)>,
     pub punch_attack_uses: Option<u16>,
 }
 
@@ -1680,7 +1753,8 @@ pub struct ItemDef {
     pub usable: bool,
     pub liquids_pointable: bool,
     pub tool_capabilities: Option16<ToolCapabilities>,
-    pub groups: Array16<Pair<String, s16>>,
+    #[wrap(Array16<Pair<String, s16>>)]
+    pub groups: Vec<(String, s16)>,
     pub node_placement_prediction: String,
     pub sound_place: SimpleSoundSpec,
     pub sound_place_failed: SimpleSoundSpec,
@@ -1723,46 +1797,48 @@ const TILE_FLAG_HAS_SCALE: u16 = 1 << 4;
 const TILE_FLAG_HAS_ALIGN_STYLE: u16 = 1 << 5;
 
 impl Serialize for TileDef {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
         u8::serialize(&6, ser)?; // tiledef version
-        Serialize::serialize(&self.name, ser)?;
-        Serialize::serialize(&self.animation, ser)?;
+        String::serialize(&value.name, ser)?;
+        TileAnimationParams::serialize(&value.animation, ser)?;
         let mut flags: u16 = 0;
-        if self.backface_culling {
+        if value.backface_culling {
             flags |= TILE_FLAG_BACKFACE_CULLING;
         }
-        if self.tileable_horizontal {
+        if value.tileable_horizontal {
             flags |= TILE_FLAG_TILEABLE_HORIZONTAL;
         }
-        if self.tileable_vertical {
+        if value.tileable_vertical {
             flags |= TILE_FLAG_TILEABLE_VERTICAL;
         }
-        if self.color_rgb.is_some() {
+        if value.color_rgb.is_some() {
             flags |= TILE_FLAG_HAS_COLOR;
         }
-        if self.scale != 0 {
+        if value.scale != 0 {
             flags |= TILE_FLAG_HAS_SCALE;
         }
-        if self.align_style != AlignStyle::Node {
+        if value.align_style != AlignStyle::Node {
             flags |= TILE_FLAG_HAS_ALIGN_STYLE;
         }
         u16::serialize(&flags, ser)?;
-        if let Some(color) = &self.color_rgb {
+        if let Some(color) = &value.color_rgb {
             u8::serialize(&color.0, ser)?;
             u8::serialize(&color.1, ser)?;
             u8::serialize(&color.2, ser)?;
         }
-        if self.scale != 0 {
-            u8::serialize(&self.scale, ser)?;
+        if value.scale != 0 {
+            u8::serialize(&value.scale, ser)?;
         }
-        if self.align_style != AlignStyle::Node {
-            Serialize::serialize(&self.align_style, ser)?;
+        if value.align_style != AlignStyle::Node {
+            AlignStyle::serialize(&value.align_style, ser)?;
         }
         Ok(())
     }
 }
 
 impl Deserialize for TileDef {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         let version: u8 = u8::deserialize(deser)?;
         if version != 6 {
@@ -1827,14 +1903,15 @@ const TAT_VERTICAL_FRAMES: u8 = 1;
 const TAT_SHEET_2D: u8 = 2;
 
 impl Serialize for TileAnimationParams {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        let typ = match self {
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        let typ = match value {
             TileAnimationParams::None => TAT_NONE,
             TileAnimationParams::VerticalFrames { .. } => TAT_VERTICAL_FRAMES,
             TileAnimationParams::Sheet2D { .. } => TAT_SHEET_2D,
         };
         u8::serialize(&typ, ser)?;
-        match self {
+        match value {
             TileAnimationParams::None => {}
             TileAnimationParams::VerticalFrames {
                 aspect_w,
@@ -1860,19 +1937,20 @@ impl Serialize for TileAnimationParams {
 }
 
 impl Deserialize for TileAnimationParams {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         let typ = u8::deserialize(deser)?;
         match typ {
             TAT_NONE => Ok(TileAnimationParams::None),
             TAT_VERTICAL_FRAMES => Ok(TileAnimationParams::VerticalFrames {
-                aspect_w: Deserialize::deserialize(deser)?,
-                aspect_h: Deserialize::deserialize(deser)?,
-                length: Deserialize::deserialize(deser)?,
+                aspect_w: u16::deserialize(deser)?,
+                aspect_h: u16::deserialize(deser)?,
+                length: f32::deserialize(deser)?,
             }),
             TAT_SHEET_2D => Ok(TileAnimationParams::Sheet2D {
-                frames_w: Deserialize::deserialize(deser)?,
-                frames_h: Deserialize::deserialize(deser)?,
-                frame_length: Deserialize::deserialize(deser)?,
+                frames_w: u8::deserialize(deser)?,
+                frames_h: u8::deserialize(deser)?,
+                frame_length: f32::deserialize(deser)?,
             }),
             _ => bail!(DeserializeError::InvalidValue(format!(
                 "Invalid TileAnimationParams type {} at: {:?}",
@@ -1915,7 +1993,8 @@ pub enum DrawType {
 pub struct ContentFeatures {
     pub version: u8,
     pub name: String,
-    pub groups: Array16<Pair<String, s16>>,
+    #[wrap(Array16<Pair<String, s16>>)]
+    pub groups: Vec<(String, s16)>,
     pub param_type: u8,
     pub param_type_2: u8,
     pub drawtype: DrawType,
@@ -1923,9 +2002,12 @@ pub struct ContentFeatures {
     pub visual_scale: f32,
     // this was an attempt to be tiledef length, but then they added an extra 6 tiledefs without fixing it
     pub unused_six: u8,
-    pub tiledef: FixedArray<6, TileDef>,
-    pub tiledef_overlay: FixedArray<6, TileDef>,
-    pub tiledef_special: Array8<TileDef>,
+    #[wrap(FixedArray<6, TileDef>)]
+    pub tiledef: [TileDef; 6],
+    #[wrap(FixedArray<6, TileDef>)]
+    pub tiledef_overlay: [TileDef; 6],
+    #[wrap(Array8<TileDef>)]
+    pub tiledef_special: Vec<TileDef>,
     pub alpha_for_legacy: u8,
     pub red: u8,
     pub green: u8,
@@ -1933,7 +2015,8 @@ pub struct ContentFeatures {
     pub palette_name: String,
     pub waving: u8,
     pub connect_sides: u8,
-    pub connects_to_ids: Array16<u16>,
+    #[wrap(Array16<u16>)]
+    pub connects_to_ids: Vec<u16>,
     pub post_effect_color: SColor,
     pub leveled: u8,
     pub light_propagates: u8,
@@ -1980,11 +2063,12 @@ pub enum NodeBox {
 }
 
 impl Serialize for NodeBox {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
         // Unused version number, always 6
         u8::serialize(&6, ser)?;
 
-        let typ = match self {
+        let typ = match value {
             NodeBox::Regular => 0,
             NodeBox::Fixed(_) => 1,
             NodeBox::Wallmounted(_) => 2,
@@ -1992,17 +2076,18 @@ impl Serialize for NodeBox {
             NodeBox::Connected(_) => 4,
         };
         u8::serialize(&typ, ser)?;
-        match self {
+        match value {
             NodeBox::Regular => Ok(()),
-            NodeBox::Fixed(v) => Serialize::serialize(v, ser),
-            NodeBox::Wallmounted(v) => Serialize::serialize(v, ser),
-            NodeBox::Leveled(v) => Serialize::serialize(v, ser),
-            NodeBox::Connected(v) => Serialize::serialize(v, ser),
+            NodeBox::Fixed(v) => NodeBoxFixed::serialize(v, ser),
+            NodeBox::Wallmounted(v) => NodeBoxWallmounted::serialize(v, ser),
+            NodeBox::Leveled(v) => NodeBoxLeveled::serialize(v, ser),
+            NodeBox::Connected(v) => NodeBoxConnected::serialize(v, ser),
         }
     }
 }
 
 impl Deserialize for NodeBox {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         let ver = u8::deserialize(deser)?;
         if ver != 6 {
@@ -2013,10 +2098,12 @@ impl Deserialize for NodeBox {
         let typ = u8::deserialize(deser)?;
         match typ {
             0 => Ok(NodeBox::Regular),
-            1 => Ok(NodeBox::Fixed(Deserialize::deserialize(deser)?)),
-            2 => Ok(NodeBox::Wallmounted(Deserialize::deserialize(deser)?)),
-            3 => Ok(NodeBox::Leveled(Deserialize::deserialize(deser)?)),
-            4 => Ok(NodeBox::Connected(Deserialize::deserialize(deser)?)),
+            1 => Ok(NodeBox::Fixed(NodeBoxFixed::deserialize(deser)?)),
+            2 => Ok(NodeBox::Wallmounted(NodeBoxWallmounted::deserialize(
+                deser,
+            )?)),
+            3 => Ok(NodeBox::Leveled(NodeBoxLeveled::deserialize(deser)?)),
+            4 => Ok(NodeBox::Connected(NodeBoxConnected::deserialize(deser)?)),
             _ => bail!(DeserializeError::InvalidValue(
                 "Invalid NodeBox type".to_string(),
             )),
@@ -2033,12 +2120,14 @@ pub struct aabb3f {
 
 #[derive(Debug, Clone, PartialEq, MinetestSerialize, MinetestDeserialize)]
 pub struct NodeBoxLeveled {
-    pub fixed: Array16<aabb3f>,
+    #[wrap(Array16<aabb3f>)]
+    pub fixed: Vec<aabb3f>,
 }
 
 #[derive(Debug, Clone, PartialEq, MinetestSerialize, MinetestDeserialize)]
 pub struct NodeBoxFixed {
-    pub fixed: Array16<aabb3f>,
+    #[wrap(Array16<aabb3f>)]
+    pub fixed: Vec<aabb3f>,
 }
 
 #[derive(Debug, Clone, PartialEq, MinetestSerialize, MinetestDeserialize)]
@@ -2050,21 +2139,36 @@ pub struct NodeBoxWallmounted {
 
 #[derive(Debug, Clone, PartialEq, MinetestSerialize, MinetestDeserialize)]
 pub struct NodeBoxConnected {
-    pub fixed: Array16<aabb3f>,
-    pub connect_top: Array16<aabb3f>,
-    pub connect_bottom: Array16<aabb3f>,
-    pub connect_front: Array16<aabb3f>,
-    pub connect_left: Array16<aabb3f>,
-    pub connect_back: Array16<aabb3f>,
-    pub connect_right: Array16<aabb3f>,
-    pub disconnected_top: Array16<aabb3f>,
-    pub disconnected_bottom: Array16<aabb3f>,
-    pub disconnected_front: Array16<aabb3f>,
-    pub disconnected_left: Array16<aabb3f>,
-    pub disconnected_back: Array16<aabb3f>,
-    pub disconnected_right: Array16<aabb3f>,
-    pub disconnected: Array16<aabb3f>,
-    pub disconnected_sides: Array16<aabb3f>,
+    #[wrap(Array16<aabb3f>)]
+    pub fixed: Vec<aabb3f>,
+    #[wrap(Array16<aabb3f>)]
+    pub connect_top: Vec<aabb3f>,
+    #[wrap(Array16<aabb3f>)]
+    pub connect_bottom: Vec<aabb3f>,
+    #[wrap(Array16<aabb3f>)]
+    pub connect_front: Vec<aabb3f>,
+    #[wrap(Array16<aabb3f>)]
+    pub connect_left: Vec<aabb3f>,
+    #[wrap(Array16<aabb3f>)]
+    pub connect_back: Vec<aabb3f>,
+    #[wrap(Array16<aabb3f>)]
+    pub connect_right: Vec<aabb3f>,
+    #[wrap(Array16<aabb3f>)]
+    pub disconnected_top: Vec<aabb3f>,
+    #[wrap(Array16<aabb3f>)]
+    pub disconnected_bottom: Vec<aabb3f>,
+    #[wrap(Array16<aabb3f>)]
+    pub disconnected_front: Vec<aabb3f>,
+    #[wrap(Array16<aabb3f>)]
+    pub disconnected_left: Vec<aabb3f>,
+    #[wrap(Array16<aabb3f>)]
+    pub disconnected_back: Vec<aabb3f>,
+    #[wrap(Array16<aabb3f>)]
+    pub disconnected_right: Vec<aabb3f>,
+    #[wrap(Array16<aabb3f>)]
+    pub disconnected: Vec<aabb3f>,
+    #[wrap(Array16<aabb3f>)]
+    pub disconnected_sides: Vec<aabb3f>,
 }
 
 #[derive(Debug, Clone, PartialEq, MinetestSerialize, MinetestDeserialize)]
@@ -2084,19 +2188,20 @@ pub struct NodeDefManager {
 /// allow the ContentFeatures to be extended in the future without
 /// changing the encoding.
 impl Serialize for NodeDefManager {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
         // Version
         u8::serialize(&1, ser)?;
-        let count: u16 = u16::try_from(self.content_features.len())?;
+        let count: u16 = u16::try_from(value.content_features.len())?;
         u16::serialize(&count, ser)?;
         // The serialization of content_features is wrapped in a String32
         // Write a marker so we can write the size later
         let string32_wrapper = ser.write_marker(4)?;
-        for (i, f) in self.content_features.iter() {
+        for (i, f) in value.content_features.iter() {
             u16::serialize(i, ser)?;
             // The contents of each feature is wrapped in a String16.
             let string16_wrapper = ser.write_marker(2)?;
-            Serialize::serialize(f, ser)?;
+            ContentFeatures::serialize(f, ser)?;
             let wlen: u16 = u16::try_from(ser.marker_distance(&string16_wrapper))?;
             ser.set_marker(string16_wrapper, &wlen.to_be_bytes()[..])?;
         }
@@ -2107,6 +2212,7 @@ impl Serialize for NodeDefManager {
 }
 
 impl Deserialize for NodeDefManager {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         let version = u8::deserialize(deser)?;
         if version != 1 {
@@ -2154,33 +2260,34 @@ impl Serialize for MapBlock {
     /// For now, only ser_fmt >= 28 is supported.
     /// For ver 28, only the nodes and nodemeta are compressed using zlib.
     /// For >= 29, the entire thing is compressed using zstd.
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
         let ver = ser.context().ser_fmt;
         let real_ser = ser;
         let mut tmp_ser = VecSerializer::new(real_ser.context(), 32768);
         let ser = &mut tmp_ser;
         let header = MapBlockHeader {
-            is_underground: self.is_underground,
-            day_night_diff: self.day_night_diff,
-            generated: self.generated,
-            lighting_complete: self.lighting_complete,
+            is_underground: value.is_underground,
+            day_night_diff: value.day_night_diff,
+            generated: value.generated,
+            lighting_complete: value.lighting_complete,
         };
-        Serialize::serialize(&header, ser)?;
+        MapBlockHeader::serialize(&header, ser)?;
         if ver >= 29 {
-            Serialize::serialize(&self.nodes, ser)?;
+            MapNodesBulk::serialize(&value.nodes, ser)?;
         } else {
             // Serialize and compress using zlib
             let mut inner = VecSerializer::new(ser.context(), 32768);
-            Serialize::serialize(&self.nodes, &mut inner)?;
+            MapNodesBulk::serialize(&value.nodes, &mut inner)?;
             let compressed = compress_zlib(&inner.take());
             ser.write_bytes(&compressed)?;
         }
         if ver >= 29 {
-            Serialize::serialize(&self.node_metadata, ser)?;
+            NodeMetadataList::serialize(&value.node_metadata, ser)?;
         } else {
             // Serialize and compress using zlib
             let mut inner = VecSerializer::new(ser.context(), 32768);
-            Serialize::serialize(&self.node_metadata, &mut inner)?;
+            NodeMetadataList::serialize(&value.node_metadata, &mut inner)?;
             let compressed = compress_zlib(&inner.take());
             ser.write_bytes(&compressed)?;
         }
@@ -2208,20 +2315,21 @@ struct MapBlockHeader {
 }
 
 impl Serialize for MapBlockHeader {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
         let mut flags: u8 = 0;
-        if self.is_underground {
+        if value.is_underground {
             flags |= 0x1;
         }
-        if self.day_night_diff {
+        if value.day_night_diff {
             flags |= 0x2;
         }
-        if !self.generated {
+        if !value.generated {
             flags |= 0x8;
         }
         u8::serialize(&flags, ser)?;
         if ser.context().ser_fmt >= 27 {
-            if let Some(lighting_complete) = self.lighting_complete {
+            if let Some(lighting_complete) = value.lighting_complete {
                 u16::serialize(&lighting_complete, ser)?;
             } else {
                 bail!("lighting_complete must be set for ver >= 27");
@@ -2234,6 +2342,7 @@ impl Serialize for MapBlockHeader {
 }
 
 impl Deserialize for MapBlockHeader {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         let flags = u8::deserialize(deser)?;
         if flags != (flags & (0x1 | 0x2 | 0x8)) {
@@ -2263,6 +2372,7 @@ impl Deserialize for MapBlockHeader {
 }
 
 impl Deserialize for MapBlock {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         let ver = deser.context().ser_fmt;
         if ver < 28 {
@@ -2279,9 +2389,9 @@ impl Deserialize for MapBlock {
             })?;
             deser.take(bytes_taken)?;
             let deser = &mut Deserializer::new(deser.context(), &tmp);
-            let header: MapBlockHeader = Deserialize::deserialize(deser)?;
-            let nodes = Deserialize::deserialize(deser)?;
-            let node_metadata = Deserialize::deserialize(deser)?;
+            let header = MapBlockHeader::deserialize(deser)?;
+            let nodes = MapNodesBulk::deserialize(deser)?;
+            let node_metadata = NodeMetadataList::deserialize(deser)?;
             Ok(Self {
                 is_underground: header.is_underground,
                 day_night_diff: header.day_night_diff,
@@ -2291,18 +2401,18 @@ impl Deserialize for MapBlock {
                 node_metadata,
             })
         } else {
-            let header: MapBlockHeader = Deserialize::deserialize(deser)?;
+            let header = MapBlockHeader::deserialize(deser)?;
             let (consumed, nodes_raw) = decompress_zlib(deser.peek_all())?;
             deser.take(consumed)?;
             let nodes = {
                 let mut tmp = Deserializer::new(deser.context(), &nodes_raw);
-                Deserialize::deserialize(&mut tmp)?
+                MapNodesBulk::deserialize(&mut tmp)?
             };
             let (consumed, metadata_raw) = decompress_zlib(deser.peek_all())?;
             deser.take(consumed)?;
             let node_metadata = {
                 let mut tmp = Deserializer::new(deser.context(), &metadata_raw);
-                Deserialize::deserialize(&mut tmp)?
+                NodeMetadataList::deserialize(&mut tmp)?
             };
             Ok(Self {
                 is_underground: header.is_underground,
@@ -2324,13 +2434,14 @@ pub struct MapNodesBulk {
 }
 
 impl Serialize for MapNodesBulk {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
         let nodecount = NODECOUNT as usize;
         // Write all param0 first
         ser.write(2 * nodecount as usize, |buf| {
             assert!(buf.len() == 2 * nodecount as usize);
             for i in 0..nodecount {
-                let v = self.nodes[i].param0.to_be_bytes();
+                let v = value.nodes[i].param0.to_be_bytes();
                 buf[2 * i] = v[0];
                 buf[2 * i + 1] = v[1];
             }
@@ -2339,14 +2450,14 @@ impl Serialize for MapNodesBulk {
         ser.write(nodecount, |buf| {
             assert!(buf.len() == nodecount);
             for i in 0..nodecount {
-                buf[i] = self.nodes[i].param1;
+                buf[i] = value.nodes[i].param1;
             }
         })?;
         // Write all param2
         ser.write(nodecount, |buf| {
             assert!(buf.len() == nodecount);
             for i in 0..nodecount {
-                buf[i] = self.nodes[i].param2;
+                buf[i] = value.nodes[i].param2;
             }
         })?;
         Ok(())
@@ -2354,6 +2465,7 @@ impl Serialize for MapNodesBulk {
 }
 
 impl Deserialize for MapNodesBulk {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         let nodecount = NODECOUNT as usize;
         let data = deser.take(4 * nodecount)?;
@@ -2387,31 +2499,35 @@ pub struct MapNode {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct NodeMetadataList {
-    pub metadata: Array16<Pair<BlockPos, NodeMetadata>>,
+    pub metadata: Vec<(BlockPos, NodeMetadata)>,
 }
 
 impl Serialize for NodeMetadataList {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        if self.metadata.len() == 0 {
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        if value.metadata.len() == 0 {
             u8::serialize(&0, ser)?; // version 0 indicates no data
             return Ok(());
         }
         u8::serialize(&2, ser)?; // version == 2
-        Serialize::serialize(&self.metadata, ser)?;
+        <Array16<Pair<BlockPos, NodeMetadata>> as Serialize>::serialize(&value.metadata, ser)?;
         Ok(())
     }
 }
 
 impl Deserialize for NodeMetadataList {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         let ver = u8::deserialize(deser)?;
         if ver == 0 {
             return Ok(Self {
-                metadata: Array16 { vec: Vec::new() },
+                metadata: Vec::new(),
             });
         } else if ver == 2 {
             Ok(Self {
-                metadata: Deserialize::deserialize(deser)?,
+                metadata: <Array16<Pair<BlockPos, NodeMetadata>> as Deserialize>::deserialize(
+                    deser,
+                )?,
             })
         } else {
             bail!(DeserializeError::InvalidValue(
@@ -2423,31 +2539,35 @@ impl Deserialize for NodeMetadataList {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AbsNodeMetadataList {
-    pub metadata: Array16<Pair<AbsBlockPos, NodeMetadata>>,
+    pub metadata: Vec<(AbsBlockPos, NodeMetadata)>,
 }
 
 impl Serialize for AbsNodeMetadataList {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        if self.metadata.len() == 0 {
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        if value.metadata.len() == 0 {
             u8::serialize(&0, ser)?; // version 0 indicates no data
             return Ok(());
         }
         u8::serialize(&2, ser)?; // version == 2
-        Serialize::serialize(&self.metadata, ser)?;
+        <Array16<Pair<AbsBlockPos, NodeMetadata>> as Serialize>::serialize(&value.metadata, ser)?;
         Ok(())
     }
 }
 
 impl Deserialize for AbsNodeMetadataList {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         let ver = u8::deserialize(deser)?;
         if ver == 0 {
             return Ok(Self {
-                metadata: Array16 { vec: Vec::new() },
+                metadata: Vec::new(),
             });
         } else if ver == 2 {
             Ok(Self {
-                metadata: Deserialize::deserialize(deser)?,
+                metadata: <Array16<Pair<AbsBlockPos, NodeMetadata>> as Deserialize>::deserialize(
+                    deser,
+                )?,
             })
         } else {
             bail!(DeserializeError::InvalidValue(
@@ -2494,13 +2614,15 @@ impl BlockPos {
 }
 
 impl Serialize for BlockPos {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        u16::serialize(&self.raw, ser)?;
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        u16::serialize(&value.raw, ser)?;
         Ok(())
     }
 }
 
 impl Deserialize for BlockPos {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         let raw = u16::deserialize(deser)?;
         if raw >= 4096 {
@@ -2514,14 +2636,16 @@ impl Deserialize for BlockPos {
 
 #[derive(Debug, Clone, PartialEq, MinetestSerialize, MinetestDeserialize)]
 pub struct NodeMetadata {
-    pub stringvars: Array32<StringVar>,
+    #[wrap(Array32<StringVar>)]
+    pub stringvars: Vec<StringVar>,
     pub inventory: Inventory,
 }
 
 #[derive(Debug, Clone, PartialEq, MinetestSerialize, MinetestDeserialize)]
 pub struct StringVar {
     pub name: String,
-    pub value: BinaryData32,
+    #[wrap(BinaryData32)]
+    pub value: Vec<u8>,
     pub is_private: bool,
 }
 
@@ -2542,8 +2666,9 @@ pub enum InventoryEntry {
 /// Unfortutely there's no way to simplify this code, it has to mirror
 /// the way Minetest does it exactly, because it is so arbitrary.
 impl Serialize for Inventory {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        for entry in &self.entries {
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        for entry in &value.entries {
             match entry {
                 InventoryEntry::KeepList(list_name) => {
                     // TODO(paradust): Performance. A format!-like macro that
@@ -2554,7 +2679,7 @@ impl Serialize for Inventory {
                 }
                 InventoryEntry::Update(list) => {
                     // Takes care of the List header line
-                    Serialize::serialize(list, ser)?;
+                    InventoryList::serialize(list, ser)?;
                 }
             }
         }
@@ -2564,6 +2689,7 @@ impl Serialize for Inventory {
 }
 
 impl Deserialize for Inventory {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         let mut result = Self {
             entries: Vec::new(),
@@ -2627,26 +2753,27 @@ pub enum ItemStackUpdate {
 }
 
 impl Serialize for InventoryList {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
         // List <name> <size>
         ser.write_bytes(b"List ")?;
-        ser.write_bytes(self.name.as_bytes())?;
+        ser.write_bytes(value.name.as_bytes())?;
         ser.write_bytes(b" ")?;
-        ser.write_bytes(self.items.len().to_string().as_bytes())?;
+        ser.write_bytes(value.items.len().to_string().as_bytes())?;
         ser.write_bytes(b"\n")?;
 
         // Width <width>
         ser.write_bytes(b"Width ")?;
-        ser.write_bytes(self.width.to_string().as_bytes())?;
+        ser.write_bytes(value.width.to_string().as_bytes())?;
         ser.write_bytes(b"\n")?;
 
-        for item in self.items.iter() {
+        for item in value.items.iter() {
             match item {
                 ItemStackUpdate::Empty => ser.write_bytes(b"Empty\n")?,
                 ItemStackUpdate::Keep => ser.write_bytes(b"Keep\n")?,
                 ItemStackUpdate::Item(itemstack) => {
                     // Writes Item line
-                    Serialize::serialize(itemstack, ser)?;
+                    ItemStack::serialize(itemstack, ser)?;
                 }
             }
         }
@@ -2656,6 +2783,7 @@ impl Serialize for InventoryList {
 }
 
 impl Deserialize for InventoryList {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         // First line should be: List <name> <item_count>
         let line = deser.take_line()?;
@@ -2696,7 +2824,7 @@ impl Deserialize for InventoryList {
                 // ItemStack takes the line
                 result
                     .items
-                    .push(ItemStackUpdate::Item(Deserialize::deserialize(deser)?));
+                    .push(ItemStackUpdate::Item(ItemStack::deserialize(deser)?));
             } else if name == b"Empty" {
                 result.items.push(ItemStackUpdate::Empty);
                 deser.take_line()?;
@@ -2722,34 +2850,34 @@ pub struct ItemStack {
 }
 
 impl Serialize for ItemStack {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
         // Item <name_json> [count] [wear] [metadata]
         ser.write_bytes(b"Item ")?;
-        serialize_json_string_if_needed(
-            &self.name.as_bytes(),
-            |chunk| Ok(ser.write_bytes(chunk)?),
-        )?;
+        serialize_json_string_if_needed(&value.name.as_bytes(), |chunk| {
+            Ok(ser.write_bytes(chunk)?)
+        })?;
 
         let mut parts = 1;
-        if !self.metadata.string_vars.is_empty() {
+        if !value.metadata.string_vars.is_empty() {
             parts = 4;
-        } else if self.wear != 0 {
+        } else if value.wear != 0 {
             parts = 3;
-        } else if self.count != 1 {
+        } else if value.count != 1 {
             parts = 2;
         }
 
         if parts >= 2 {
             ser.write_bytes(b" ")?;
-            ser.write_bytes(self.count.to_string().as_bytes())?;
+            ser.write_bytes(value.count.to_string().as_bytes())?;
         }
         if parts >= 3 {
             ser.write_bytes(b" ")?;
-            ser.write_bytes(self.wear.to_string().as_bytes())?;
+            ser.write_bytes(value.wear.to_string().as_bytes())?;
         }
         if parts >= 4 {
             ser.write_bytes(b" ")?;
-            Serialize::serialize(&self.metadata, ser)?;
+            ItemStackMetadata::serialize(&value.metadata, ser)?;
         }
         ser.write_bytes(b"\n")?;
         Ok(())
@@ -2757,6 +2885,7 @@ impl Serialize for ItemStack {
 }
 
 impl Deserialize for ItemStack {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         // Item "name maybe escaped" [count] [wear] ["metadata escaped"]
         let line = deser.take_line()?;
@@ -2805,10 +2934,11 @@ const DESERIALIZE_KV_DELIM: &[u8; 1] = b"\x02";
 const DESERIALIZE_PAIR_DELIM: &[u8; 1] = b"\x03";
 
 impl Serialize for ItemStackMetadata {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
         let mut buf: Vec<u8> = Vec::new();
         buf.extend(DESERIALIZE_START);
-        for (key, val) in self.string_vars.iter() {
+        for (key, val) in value.string_vars.iter() {
             if !key.is_empty() || !val.is_empty() {
                 buf.extend(key.as_bytes());
                 buf.extend(DESERIALIZE_KV_DELIM);
@@ -2822,6 +2952,7 @@ impl Serialize for ItemStackMetadata {
 }
 
 impl Deserialize for ItemStackMetadata {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         let (raw, count) = deserialize_json_string_if_needed(deser.peek_all())?;
         deser.take(count)?;
@@ -2879,7 +3010,8 @@ pub struct AddParticleSpawnerLegacy {
     pub size_start: RangedParameterLegacy<f32>,
 
     pub collision_detection: bool,
-    pub texture_string: LongString,
+    #[wrap(LongString)]
+    pub texture_string: String,
     pub id: u32,
     pub vertical: bool,
     pub collision_removal: bool,
@@ -2916,7 +3048,8 @@ pub struct AddParticleSpawnerExtra {
     pub bounce: TweenedParameter<RangedParameter<f32>>,
     pub attractor: Attractor, // attract_kind, followed by p.attract.serialize, p.attract_origin.ser, etc
     pub radius: TweenedParameter<RangedParameter<v3f>>,
-    pub texpool: Array16<ServerParticleTexture>,
+    #[wrap(Array16<ServerParticleTexture>)]
+    pub texpool: Vec<ServerParticleTexture>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -2928,32 +3061,34 @@ pub enum Attractor {
 }
 
 impl Serialize for Attractor {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        let kind: u8 = match self {
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        let kind: u8 = match value {
             Attractor::None => 0,
             Attractor::Point(_) => 1,
             Attractor::Line(_) => 2,
             Attractor::Plane(_) => 3,
         };
         u8::serialize(&kind, ser)?;
-        match self {
+        match value {
             Attractor::None => (),
-            Attractor::Point(v) => Serialize::serialize(v, ser)?,
-            Attractor::Line(v) => Serialize::serialize(v, ser)?,
-            Attractor::Plane(v) => Serialize::serialize(v, ser)?,
+            Attractor::Point(v) => PointAttractor::serialize(v, ser)?,
+            Attractor::Line(v) => LineAttractor::serialize(v, ser)?,
+            Attractor::Plane(v) => PlaneAttractor::serialize(v, ser)?,
         }
         Ok(())
     }
 }
 
 impl Deserialize for Attractor {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         let kind = u8::deserialize(deser)?;
         Ok(match kind {
             0 => Attractor::None,
-            1 => Attractor::Point(Deserialize::deserialize(deser)?),
-            2 => Attractor::Line(Deserialize::deserialize(deser)?),
-            3 => Attractor::Plane(Deserialize::deserialize(deser)?),
+            1 => Attractor::Point(PointAttractor::deserialize(deser)?),
+            2 => Attractor::Line(LineAttractor::deserialize(deser)?),
+            3 => Attractor::Plane(PlaneAttractor::deserialize(deser)?),
             _ => bail!("Invalid AttractorKind: {}", kind),
         })
     }
@@ -3028,30 +3163,32 @@ pub struct ServerParticleTextureNewPropsOnly {
 }
 
 impl Serialize for ServerParticleTextureNewPropsOnly {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        let mut flags: u8 = self.blend_mode.to_u8() << 1;
-        if self.animation.is_some() {
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        let mut flags: u8 = value.blend_mode.to_u8() << 1;
+        if value.animation.is_some() {
             flags |= 1;
         }
         u8::serialize(&flags, ser)?;
-        Serialize::serialize(&self.alpha, ser)?;
-        Serialize::serialize(&self.scale, ser)?;
-        Serialize::serialize(&self.animation, ser)?;
+        <TweenedParameter<f32>>::serialize(&value.alpha, ser)?;
+        <TweenedParameter<v2f>>::serialize(&value.scale, ser)?;
+        <Option<TileAnimationParams>>::serialize(&value.animation, ser)?;
         Ok(())
     }
 }
 
 impl Deserialize for ServerParticleTextureNewPropsOnly {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         let flags: u8 = u8::deserialize(deser)?;
         let animated: bool = (flags & 1) != 0;
         let blend_mode = BlendMode::from_u8(flags >> 1)?;
         Ok(Self {
             blend_mode,
-            alpha: Deserialize::deserialize(deser)?,
-            scale: Deserialize::deserialize(deser)?,
+            alpha: <TweenedParameter<f32>>::deserialize(deser)?,
+            scale: <TweenedParameter<v2f>>::deserialize(deser)?,
             animation: if animated {
-                Deserialize::deserialize(deser)?
+                <Option<TileAnimationParams>>::deserialize(deser)?
             } else {
                 None
             },
@@ -3064,37 +3201,39 @@ pub struct ServerParticleTexture {
     pub blend_mode: BlendMode,
     pub alpha: TweenedParameter<f32>,
     pub scale: TweenedParameter<v2f>,
-    pub string: LongString,
+    pub string: String, // LongString
     pub animation: Option<TileAnimationParams>,
 }
 
 impl Serialize for ServerParticleTexture {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        let mut flags: u8 = self.blend_mode.to_u8() << 1;
-        if self.animation.is_some() {
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        let mut flags: u8 = value.blend_mode.to_u8() << 1;
+        if value.animation.is_some() {
             flags |= 1;
         }
         u8::serialize(&flags, ser)?;
-        Serialize::serialize(&self.alpha, ser)?;
-        Serialize::serialize(&self.scale, ser)?;
-        Serialize::serialize(&self.string, ser)?;
-        Serialize::serialize(&self.animation, ser)?;
+        <TweenedParameter<f32>>::serialize(&value.alpha, ser)?;
+        <TweenedParameter<v2f>>::serialize(&value.scale, ser)?;
+        LongString::serialize(&value.string, ser)?;
+        <Option<TileAnimationParams>>::serialize(&value.animation, ser)?;
         Ok(())
     }
 }
 
 impl Deserialize for ServerParticleTexture {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         let flags: u8 = u8::deserialize(deser)?;
         let animated: bool = (flags & 1) != 0;
         let blend_mode = BlendMode::from_u8(flags >> 1)?;
         Ok(Self {
             blend_mode,
-            alpha: Deserialize::deserialize(deser)?,
-            scale: Deserialize::deserialize(deser)?,
-            string: Deserialize::deserialize(deser)?,
+            alpha: <TweenedParameter<f32>>::deserialize(deser)?,
+            scale: <TweenedParameter<v2f>>::deserialize(deser)?,
+            string: LongString::deserialize(deser)?,
             animation: if animated {
-                Deserialize::deserialize(deser)?
+                <Option<TileAnimationParams>>::deserialize(deser)?
             } else {
                 None
             },
@@ -3111,7 +3250,11 @@ pub enum TweenStyle {
 }
 
 #[derive(Debug, Clone, PartialEq, MinetestSerialize, MinetestDeserialize)]
-pub struct TweenedParameter<T: Serialize + Deserialize> {
+pub struct TweenedParameter<T: Serialize + Deserialize>
+where
+    T: Serialize<Input = T>,
+    T: Deserialize<Output = T>,
+{
     pub style: TweenStyle,
     pub reps: u16,
     pub beginning: f32,
@@ -3129,7 +3272,8 @@ pub struct ParticleParameters {
     pub expiration_time: f32,
     pub size: f32,
     pub collision_detection: bool,
-    pub texture: LongString, // ServerParticleTexture.string
+    #[wrap(LongString)]
+    pub texture: String, // ServerParticleTexture.string
     pub vertical: bool,
     pub collision_removal: bool,
     pub animation: TileAnimationParams,
@@ -3145,14 +3289,22 @@ pub struct ParticleParameters {
 }
 
 #[derive(Debug, Clone, PartialEq, MinetestSerialize, MinetestDeserialize)]
-pub struct RangedParameter<T: Serialize + Deserialize> {
+pub struct RangedParameter<T: Serialize + Deserialize>
+where
+    T: Serialize<Input = T>,
+    T: Deserialize<Output = T>,
+{
     pub min: T,
     pub max: T,
     pub bias: f32,
 }
 
 #[derive(Debug, Clone, PartialEq, MinetestSerialize, MinetestDeserialize)]
-pub struct RangedParameterLegacy<T: Serialize + Deserialize> {
+pub struct RangedParameterLegacy<T: Serialize + Deserialize>
+where
+    T: Serialize<Input = T>,
+    T: Deserialize<Output = T>,
+{
     pub min: T,
     pub max: T,
 }
@@ -3182,31 +3334,33 @@ pub enum HudSetParam {
 }
 
 impl Serialize for HudSetParam {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
         use HudSetParam::*;
-        let param: u16 = match self {
+        let param: u16 = match value {
             SetHotBarItemCount(_) => 1,
             SetHotBarImage(_) => 2,
             SetHotBarSelectedImage(_) => 3,
         };
-        Serialize::serialize(&param, ser)?;
-        match self {
+        u16::serialize(&param, ser)?;
+        match value {
             SetHotBarItemCount(v) => {
                 // The value is wrapped in a a String16
                 u16::serialize(&4, ser)?;
-                Serialize::serialize(v, ser)?;
+                s32::serialize(v, ser)?;
             }
-            SetHotBarImage(v) => Serialize::serialize(v, ser)?,
-            SetHotBarSelectedImage(v) => Serialize::serialize(v, ser)?,
+            SetHotBarImage(v) => String::serialize(v, ser)?,
+            SetHotBarSelectedImage(v) => String::serialize(v, ser)?,
         };
         Ok(())
     }
 }
 
 impl Deserialize for HudSetParam {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         use HudSetParam::*;
-        let param: u16 = Deserialize::deserialize(deser)?;
+        let param = u16::deserialize(deser)?;
         Ok(match param {
             1 => {
                 let size = u16::deserialize(deser)?;
@@ -3215,8 +3369,8 @@ impl Deserialize for HudSetParam {
                 }
                 SetHotBarItemCount(s32::deserialize(deser)?)
             }
-            2 => SetHotBarImage(Deserialize::deserialize(deser)?),
-            3 => SetHotBarSelectedImage(Deserialize::deserialize(deser)?),
+            2 => SetHotBarImage(String::deserialize(deser)?),
+            3 => SetHotBarSelectedImage(String::deserialize(deser)?),
             _ => bail!("Invalid HudSetParam param: {}", param),
         })
     }
@@ -3266,13 +3420,15 @@ impl HudFlags {
 }
 
 impl Serialize for HudFlags {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        let value = self.to_u32();
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        let value = value.to_u32();
         u32::serialize(&value, ser)
     }
 }
 
 impl Deserialize for HudFlags {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         let value = u32::deserialize(deser)?;
         if (value & !0b111111111) != 0 {
@@ -3305,28 +3461,29 @@ pub enum PointedThing {
 }
 
 impl Serialize for PointedThing {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
         // version, always 0
         u8::serialize(&0, ser)?;
 
-        let typ: u8 = match self {
+        let typ: u8 = match value {
             PointedThing::Nothing => 0,
             PointedThing::Node { .. } => 1,
             PointedThing::Object { .. } => 2,
         };
         u8::serialize(&typ, ser)?;
 
-        match self {
+        match value {
             PointedThing::Nothing => (),
             PointedThing::Node {
                 under_surface,
                 above_surface,
             } => {
-                Serialize::serialize(under_surface, ser)?;
-                Serialize::serialize(above_surface, ser)?;
+                v3s16::serialize(under_surface, ser)?;
+                v3s16::serialize(above_surface, ser)?;
             }
             PointedThing::Object { object_id } => {
-                Serialize::serialize(object_id, ser)?;
+                u16::serialize(object_id, ser)?;
             }
         }
         Ok(())
@@ -3334,6 +3491,7 @@ impl Serialize for PointedThing {
 }
 
 impl Deserialize for PointedThing {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         let ver = u8::deserialize(deser)?;
         if ver != 0 {
@@ -3343,11 +3501,11 @@ impl Deserialize for PointedThing {
         Ok(match typ {
             0 => PointedThing::Nothing,
             1 => PointedThing::Node {
-                under_surface: Deserialize::deserialize(deser)?,
-                above_surface: Deserialize::deserialize(deser)?,
+                under_surface: v3s16::deserialize(deser)?,
+                above_surface: v3s16::deserialize(deser)?,
             },
             2 => PointedThing::Object {
-                object_id: Deserialize::deserialize(deser)?,
+                object_id: u16::deserialize(deser)?,
             },
             _ => bail!("Invalid PointedThing type: {}", typ),
         })
@@ -3378,8 +3536,9 @@ pub enum InventoryAction {
 }
 
 impl Serialize for InventoryAction {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        match self {
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        match value {
             InventoryAction::Move {
                 count,
                 from_inv,
@@ -3396,13 +3555,13 @@ impl Serialize for InventoryAction {
                 }
                 ser.write_bytes(itos!(count))?;
                 ser.write_bytes(b" ")?;
-                Serialize::serialize(from_inv, ser)?;
+                InventoryLocation::serialize(from_inv, ser)?;
                 ser.write_bytes(b" ")?;
                 ser.write_bytes(from_list.as_bytes())?;
                 ser.write_bytes(b" ")?;
                 ser.write_bytes(itos!(from_i))?;
                 ser.write_bytes(b" ")?;
-                Serialize::serialize(to_inv, ser)?;
+                InventoryLocation::serialize(to_inv, ser)?;
                 ser.write_bytes(b" ")?;
                 ser.write_bytes(to_list.as_bytes())?;
                 if let Some(to_i) = to_i {
@@ -3414,7 +3573,7 @@ impl Serialize for InventoryAction {
                 ser.write_bytes(b"Craft ")?;
                 ser.write_bytes(itos!(count))?;
                 ser.write_bytes(b" ")?;
-                Serialize::serialize(craft_inv, ser)?;
+                InventoryLocation::serialize(craft_inv, ser)?;
                 // This extra space is present in Minetest
                 ser.write_bytes(b" ")?;
             }
@@ -3427,7 +3586,7 @@ impl Serialize for InventoryAction {
                 ser.write_bytes(b"Drop ")?;
                 ser.write_bytes(itos!(count))?;
                 ser.write_bytes(b" ")?;
-                Serialize::serialize(from_inv, ser)?;
+                InventoryLocation::serialize(from_inv, ser)?;
                 ser.write_bytes(b" ")?;
                 ser.write_bytes(from_list.as_bytes())?;
                 ser.write_bytes(b" ")?;
@@ -3439,15 +3598,16 @@ impl Serialize for InventoryAction {
 }
 
 impl Deserialize for InventoryAction {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         let word = deser.take_word(true);
         if word == b"Move" || word == b"MoveSomewhere" {
             Ok(InventoryAction::Move {
                 count: stoi(deser.take_word(true))?,
-                from_inv: Deserialize::deserialize(deser)?,
+                from_inv: InventoryLocation::deserialize(deser)?,
                 from_list: std::str::from_utf8(deser.take_word(true))?.to_owned(),
                 from_i: stoi(deser.take_word(true))?,
-                to_inv: Deserialize::deserialize(deser)?,
+                to_inv: InventoryLocation::deserialize(deser)?,
                 to_list: std::str::from_utf8(deser.take_word(true))?.to_owned(),
                 to_i: if word == b"Move" {
                     Some(stoi(deser.take_word(true))?)
@@ -3458,14 +3618,14 @@ impl Deserialize for InventoryAction {
         } else if word == b"Drop" {
             Ok(InventoryAction::Drop {
                 count: stoi(deser.take_word(true))?,
-                from_inv: Deserialize::deserialize(deser)?,
+                from_inv: InventoryLocation::deserialize(deser)?,
                 from_list: std::str::from_utf8(deser.take_word(true))?.to_owned(),
                 from_i: stoi(deser.take_word(true))?,
             })
         } else if word == b"Craft" {
             Ok(InventoryAction::Craft {
                 count: stoi(deser.take_word(true))?,
-                craft_inv: Deserialize::deserialize(deser)?,
+                craft_inv: InventoryLocation::deserialize(deser)?,
             })
         } else {
             bail!("Invalid InventoryAction kind");
@@ -3483,8 +3643,9 @@ pub enum InventoryLocation {
 }
 
 impl Serialize for InventoryLocation {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        match self {
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        match value {
             InventoryLocation::Undefined => ser.write_bytes(b"undefined")?,
             InventoryLocation::CurrentPlayer => ser.write_bytes(b"current_player")?,
             InventoryLocation::Player { name } => {
@@ -3504,6 +3665,7 @@ impl Serialize for InventoryLocation {
 }
 
 impl Deserialize for InventoryLocation {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         let word = deser.take_word(true);
         if word == b"undefined" {

@@ -342,7 +342,7 @@ impl PeerRunner {
     pub fn serialize_for_send(&mut self, channel: u8, body: PacketBody) -> Result<Vec<u8>> {
         let pkt = Packet::new(self.local_peer_id, channel, body);
         let mut serializer = VecSerializer::new(self.send_context, 512);
-        Serialize::serialize(&pkt, &mut serializer)?;
+        Packet::serialize(&pkt, &mut serializer)?;
         Ok(serializer.take())
     }
 

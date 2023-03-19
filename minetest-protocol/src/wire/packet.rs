@@ -45,12 +45,14 @@ impl AckBody {
 }
 
 impl Serialize for AckBody {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        u16::serialize(&self.seqnum, ser)
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        u16::serialize(&value.seqnum, ser)
     }
 }
 
 impl Deserialize for AckBody {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         Ok(Self {
             seqnum: u16::deserialize(deser)?,
@@ -74,12 +76,14 @@ impl SetPeerIdBody {
 }
 
 impl Serialize for SetPeerIdBody {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        u16::serialize(&self.peer_id, ser)
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        u16::serialize(&value.peer_id, ser)
     }
 }
 
 impl Deserialize for SetPeerIdBody {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         Ok(Self {
             peer_id: u16::deserialize(deser)?,
@@ -102,18 +106,19 @@ impl ControlBody {
 }
 
 impl Serialize for ControlBody {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
         use ControlBody::*;
-        let control_type = match self {
+        let control_type = match value {
             Ack(_) => 0,
             SetPeerId(_) => 1,
             Ping => 2,
             Disconnect => 3,
         };
         u8::serialize(&control_type, ser)?;
-        match self {
-            Ack(body) => Serialize::serialize(body, ser)?,
-            SetPeerId(body) => Serialize::serialize(body, ser)?,
+        match value {
+            Ack(body) => AckBody::serialize(body, ser)?,
+            SetPeerId(body) => SetPeerIdBody::serialize(body, ser)?,
             Ping => (),
             Disconnect => (),
         };
@@ -122,12 +127,14 @@ impl Serialize for ControlBody {
 }
 
 impl Deserialize for ControlBody {
+    type Output = Self;
+
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         use ControlBody::*;
         let control_type = u8::deserialize(deser)?;
         match control_type {
-            0 => Ok(Ack(Deserialize::deserialize(deser)?)),
-            1 => Ok(SetPeerId(Deserialize::deserialize(deser)?)),
+            0 => Ok(Ack(AckBody::deserialize(deser)?)),
+            1 => Ok(SetPeerId(SetPeerIdBody::deserialize(deser)?)),
             2 => Ok(Ping),
             3 => Ok(Disconnect),
             _ => bail!(DeserializeError::InvalidValue(String::from(
@@ -143,15 +150,17 @@ pub struct OriginalBody {
 }
 
 impl Serialize for OriginalBody {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        Serialize::serialize(&self.command, ser)
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        Command::serialize(&value.command, ser)
     }
 }
 
 impl Deserialize for OriginalBody {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         Ok(OriginalBody {
-            command: Deserialize::deserialize(deser)?,
+            command: Command::deserialize(deser)?,
         })
     }
 }
@@ -165,21 +174,24 @@ pub struct SplitBody {
 }
 
 impl Serialize for SplitBody {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        Serialize::serialize(&self.seqnum, ser)?;
-        Serialize::serialize(&self.chunk_count, ser)?;
-        Serialize::serialize(&self.chunk_num, ser)?;
-        ser.write_bytes(&self.chunk_data)?;
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        u16::serialize(&value.seqnum, ser)?;
+        u16::serialize(&value.chunk_count, ser)?;
+        u16::serialize(&value.chunk_num, ser)?;
+        ser.write_bytes(&value.chunk_data)?;
         Ok(())
     }
 }
 
 impl Deserialize for SplitBody {
+    type Output = Self;
+
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         Ok(SplitBody {
-            seqnum: Deserialize::deserialize(deser)?,
-            chunk_count: Deserialize::deserialize(deser)?,
-            chunk_num: Deserialize::deserialize(deser)?,
+            seqnum: u16::deserialize(deser)?,
+            chunk_count: u16::deserialize(deser)?,
+            chunk_num: u16::deserialize(deser)?,
             chunk_data: Vec::from(deser.take_all()),
         })
     }
@@ -192,26 +204,28 @@ pub struct ReliableBody {
 }
 
 impl Serialize for ReliableBody {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
         let packet_type: u8 = 3;
-        Serialize::serialize(&packet_type, ser)?;
-        Serialize::serialize(&self.seqnum, ser)?;
-        Serialize::serialize(&self.inner, ser)?;
+        u8::serialize(&packet_type, ser)?;
+        u16::serialize(&value.seqnum, ser)?;
+        InnerBody::serialize(&value.inner, ser)?;
         Ok(())
     }
 }
 
 impl Deserialize for ReliableBody {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
-        let packet_type: u8 = Deserialize::deserialize(deser)?;
+        let packet_type = u8::deserialize(deser)?;
         if packet_type != 3 {
             bail!(DeserializeError::InvalidValue(
                 "Invalid packet_type for ReliableBody".to_string(),
             ))
         }
         Ok(ReliableBody {
-            seqnum: Deserialize::deserialize(deser)?,
-            inner: Deserialize::deserialize(deser)?,
+            seqnum: u16::deserialize(deser)?,
+            inner: InnerBody::deserialize(deser)?,
         })
     }
 }
@@ -255,30 +269,33 @@ impl InnerBody {
 }
 
 impl Serialize for InnerBody {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
         use InnerBody::*;
-        let packet_type: u8 = match self {
+        let packet_type: u8 = match value {
             Control(..) => 0,
             Original(..) => 1,
             Split(..) => 2,
         };
         u8::serialize(&packet_type, ser)?;
-        match self {
-            Control(b) => Serialize::serialize(b, ser),
-            Original(b) => Serialize::serialize(b, ser),
-            Split(b) => Serialize::serialize(b, ser),
+        match value {
+            Control(b) => ControlBody::serialize(b, ser),
+            Original(b) => OriginalBody::serialize(b, ser),
+            Split(b) => SplitBody::serialize(b, ser),
         }
     }
 }
 
 impl Deserialize for InnerBody {
+    type Output = Self;
+
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         use InnerBody::*;
         let packet_type = u8::deserialize(deser)?;
         match packet_type {
-            0 => Ok(Control(Deserialize::deserialize(deser)?)),
-            1 => Ok(Original(Deserialize::deserialize(deser)?)),
-            2 => Ok(Split(Deserialize::deserialize(deser)?)),
+            0 => Ok(Control(ControlBody::deserialize(deser)?)),
+            1 => Ok(Original(OriginalBody::deserialize(deser)?)),
+            2 => Ok(Split(SplitBody::deserialize(deser)?)),
             _ => bail!(DeserializeError::InvalidPacketKind(packet_type)),
         }
     }
@@ -304,25 +321,27 @@ impl PacketBody {
 }
 
 impl Serialize for PacketBody {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
         use PacketBody::*;
         // Both ReliableBody and InnerBody will emit their own packet type.
-        match self {
-            Reliable(body) => Serialize::serialize(body, ser),
-            Inner(inner) => Serialize::serialize(inner, ser),
+        match value {
+            Reliable(body) => ReliableBody::serialize(body, ser),
+            Inner(inner) => InnerBody::serialize(inner, ser),
         }
     }
 }
 
 impl Deserialize for PacketBody {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         use PacketBody::*;
         // Both ReliableBody and InnerBody expect to consume the packet type tag.
         // So only peek it.
         let packet_type = deser.peek(1)?[0];
         match packet_type {
-            3 => Ok(Reliable(Deserialize::deserialize(deser)?)),
-            _ => Ok(Inner(Deserialize::deserialize(deser)?)),
+            3 => Ok(Reliable(ReliableBody::deserialize(deser)?)),
+            _ => Ok(Inner(InnerBody::deserialize(deser)?)),
         }
     }
 }
@@ -366,22 +385,24 @@ impl Packet {
 }
 
 impl Serialize for Packet {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult {
-        Serialize::serialize(&self.protocol_id, ser)?;
-        Serialize::serialize(&self.sender_peer_id, ser)?;
-        Serialize::serialize(&self.channel, ser)?;
-        Serialize::serialize(&self.body, ser)?;
+    type Input = Self;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult {
+        u32::serialize(&value.protocol_id, ser)?;
+        u16::serialize(&value.sender_peer_id, ser)?;
+        u8::serialize(&value.channel, ser)?;
+        PacketBody::serialize(&value.body, ser)?;
         Ok(())
     }
 }
 
 impl Deserialize for Packet {
+    type Output = Self;
     fn deserialize(deser: &mut Deserializer) -> DeserializeResult<Self> {
         let pkt = Packet {
-            protocol_id: Deserialize::deserialize(deser)?,
-            sender_peer_id: Deserialize::deserialize(deser)?,
-            channel: Deserialize::deserialize(deser)?,
-            body: Deserialize::deserialize(deser)?,
+            protocol_id: u32::deserialize(deser)?,
+            sender_peer_id: PeerId::deserialize(deser)?,
+            channel: u8::deserialize(deser)?,
+            body: PacketBody::deserialize(deser)?,
         };
         if pkt.protocol_id != PROTOCOL_ID {
             bail!(DeserializeError::InvalidProtocolId(pkt.protocol_id))

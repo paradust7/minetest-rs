@@ -272,5 +272,6 @@ impl Serializer for MockSerializer {
 }
 
 pub trait Serialize {
-    fn serialize<S: Serializer>(&self, ser: &mut S) -> SerializeResult;
+    type Input: ?Sized;
+    fn serialize<S: Serializer>(value: &Self::Input, ser: &mut S) -> SerializeResult;
 }
